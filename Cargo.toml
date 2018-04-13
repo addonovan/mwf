@@ -1,0 +1,7 @@
+[package]
+name = "mwf"
+version = "0.1.0"
+authors = ["addonovan <austin@addonovan.com>"]
+
+[dependencies]
+iron = "0.6"
