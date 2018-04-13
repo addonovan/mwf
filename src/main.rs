@@ -1,19 +1,16 @@
 extern crate iron;
 
-use iron::IronResult;
-use iron::Response;
-use iron::Request;
-use iron::status;
-use iron::prelude::Iron;
-
-fn hello_world(_: &mut Request) -> IronResult< Response >
-{
-    Ok( Response::with( ( status::Ok, "Hello world!" ) ) )
-}
+mod mwf;
+use mwf::{WebFrameworkBuilder};
 
 fn main() {
-    let _server = Iron::new(hello_world)
-            .http("localhost:8080")
-            .unwrap();
-    println!("Running");
+    WebFrameworkBuilder::new()
+        .on_page("test".to_owned(), |path| {
+            "Hello world!".to_owned()
+        })
+        .on_page("test2".to_owned(), |path| {
+            "Goodbye world!".to_owned()
+        })
+        .start()
+        .unwrap();
 }
