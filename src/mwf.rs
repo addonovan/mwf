@@ -4,13 +4,11 @@ use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 
 use iron::*;
-use iron::prelude::*;
-use iron::Error;
 use iron::error::HttpResult;
 use iron::status;
 use iron::Request;
 
-type PageHandler = fn(&Vec<&str>) -> String;
+pub type PageHandler = fn(HashMap<String, String>)-> String;
 
 //
 // The framework builder
@@ -18,7 +16,7 @@ type PageHandler = fn(&Vec<&str>) -> String;
 
 pub struct WebFrameworkBuilder
 {
-    pages: HashMap<String, PageHandler>,
+    pages: HashMap<Vec<String>, PageHandler>,
 }
 
 impl WebFrameworkBuilder
@@ -32,6 +30,9 @@ impl WebFrameworkBuilder
 
     pub fn on_page(mut self, path: String, handler: PageHandler) -> Self
     {
+        let path = path.split("/")
+            .map(|it| it.to_owned())
+            .collect();
         self.pages.insert(path, handler);
         self
     }
@@ -58,30 +59,76 @@ impl WebFrameworkBuilder
 
 struct WebFramework
 {
-    pages: HashMap< String, PageHandler >,
+    pages: Vec<(PathMatcher, PageHandler)>,
 }
 
 impl WebFramework
 {
-    fn new(pages: HashMap<String, PageHandler>) -> Self
+    fn new(pages: HashMap<Vec<String>, PageHandler>) -> Self
     {
+        let pages = pages.into_iter().map(|it| {
+            (PathMatcher::new(it.0), it.1)
+        }).collect();
+
         WebFramework {
-            pages,
+            pages
         }
     }
 
     fn handle(&self, request: &mut Request) -> IronResult<Response>
     {
         let path = request.url.path();
-        let seg = path.get(0).unwrap();
 
-        if let Some(handler) = self.pages.get::<str>(&seg) {
-            let response = handler(&path);
-            Ok(Response::with((status::Ok, response)))
+        for &(ref matcher, ref handler) in &self.pages {
+            let data = match matcher.matches(&path) {
+                None => continue,
+                Some(x) => x,
+            };
+
+            let content = handler(data);
+            return Ok(Response::with((status::Ok, content)));
         }
-        else {
-            Ok(Response::with(status::NotFound))
-        }
+
+        Ok(Response::with(status::NotFound))
     }
 }
 
+struct PathMatcher
+{
+    parts: Vec<String>,
+}
+
+impl PathMatcher
+{
+    fn new(parts: Vec<String>) -> Self
+    {
+        PathMatcher {
+            parts
+        }
+    }
+
+    fn matches(&self, path: &Vec<&str>) -> Option<HashMap<String, String>>
+    {
+        if self.parts.len() != path.len() {
+            return None;
+        }
+
+        let mut map = HashMap::new();
+        for i in 0..self.parts.len() {
+            let expected = self.parts[ i ].clone();
+            let actual = path[ i ];
+
+            if expected == *actual {
+                continue;
+            }
+            else if expected.starts_with( ":" ) {
+                map.insert(expected, actual.to_string());
+            }
+            else {
+                return None;
+            }
+        }
+
+        Some(map)
+    }
+}
