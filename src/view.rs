@@ -66,3 +66,46 @@ impl From<String> for View
     }
 }
 
+#[cfg(test)]
+mod test
+{
+    use view::*;
+
+    #[test]
+    fn from_path()
+    {
+        let path = "src/view.rs";
+        let expected = include_str!("view.rs");
+        let expected = expected.to_owned();
+
+        let view = View::path(path).unwrap();
+        assert_eq!(expected, view.content);
+
+        assert!(View::path("src/rs.view").is_err());
+    }
+
+    #[test]
+    fn from_string()
+    {
+        let input = "a";
+        let expected = input.to_owned();
+        assert_eq!(expected, View::from(input).unwrap().content);
+    }
+
+    #[test]
+    fn from_str()
+    {
+        let input = "a".to_owned();
+        let expected = input.clone();
+        assert_eq!(expected, View::from(input).unwrap().content);
+    }
+
+    #[test]
+    fn into_string()
+    {
+        let input = "a".to_owned();
+        let expected = input.clone();
+        let view: String = View::from(input).unwrap().into();
+        assert_eq!(expected, view);
+    }
+}
