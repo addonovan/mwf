@@ -1,12 +1,13 @@
-
 use std::collections::HashMap;
 
 /** Maps a route's variables to their respective values */
 pub type RouteMap = HashMap<String, String>;
 
 /**
- * A URL matcher and resolver. `Router`s have a simple job:
- * given a path on the server, accept it or reject it.
+ * Creates instances of [RouteResolver]s, so the way pages are
+ * routed can be easily changed.
+ *
+ * See [StandardRouter] for an example of what `Routers` do.
  */
 pub trait Router
     where Self: Send + Sync
@@ -50,6 +51,7 @@ pub struct StandardRouter;
  */
 pub struct StandardResolver
 {
+    /** The routing specification */
     route: Vec<String>
 }
 
@@ -68,6 +70,7 @@ impl Router for StandardRouter
     fn resolver(&self, route_spec: String) -> Box<RouteResolver>
     {
         let route = route_spec.split("/")
+            .skip(1) // skip the leading root
             .map(String::from)
             .collect();
 
