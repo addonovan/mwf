@@ -1,11 +1,7 @@
 extern crate iron;
+extern crate mwf;
 
-mod mwf;
-mod routing;
-mod view;
-
-use view::View;
-use mwf::{ServerBuilder};
+use mwf::{View, ServerBuilder};
 
 fn main() {
     ServerBuilder::new()

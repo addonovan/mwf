@@ -3,8 +3,8 @@ extern crate iron;
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 
-use routing::*;
-use view::*;
+use super::routing::*;
+use super::view::*;
 
 use iron::*;
 use iron::error::HttpResult;
