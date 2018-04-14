@@ -1,14 +1,17 @@
 extern crate iron;
 
 mod mwf;
+mod routing;
 use mwf::{WebFrameworkBuilder};
+use routing::StandardRouter;
 
 fn main() {
     WebFrameworkBuilder::new()
-        .on_page("test".to_owned(), |_| {
+        .router(StandardRouter::new())
+        .on_page("test", |_| {
             "Hello world!".to_owned()
         })
-        .on_page("user/:name".to_owned(), |args| {
+        .on_page("user/:name", |args| {
             format!( "hello, {}!", args[":name"])
         })
         .on_page_not_found(|args| {

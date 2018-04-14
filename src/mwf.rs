@@ -3,6 +3,8 @@ extern crate iron;
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 
+use routing::*;
+
 use iron::*;
 use iron::error::HttpResult;
 use iron::status;
@@ -16,8 +18,9 @@ pub type PageHandler = fn(HashMap<String, String>)-> String;
 
 pub struct WebFrameworkBuilder
 {
-    pages: HashMap<Vec<String>, PageHandler>,
-    page_not_found: PageHandler
+    pages: HashMap<String, PageHandler>,
+    page_not_found: PageHandler,
+    router: Box<Router>,
 }
 
 impl WebFrameworkBuilder
@@ -31,15 +34,19 @@ impl WebFrameworkBuilder
         WebFrameworkBuilder {
             pages: HashMap::new(),
             page_not_found,
+            router: Box::new(StandardRouter::new()),
         }
     }
 
-    pub fn on_page(mut self, path: String, handler: PageHandler) -> Self
+    pub fn router<T: 'static + Router>(mut self, router: T) -> Self
     {
-        let path = path.split("/")
-            .map(|it| it.to_owned())
-            .collect();
-        self.pages.insert(path, handler);
+        self.router = Box::new(router);
+        self
+    }
+
+    pub fn on_page(mut self, path: &str, handler: PageHandler) -> Self
+    {
+        self.pages.insert(path.to_owned(), handler);
         self
     }
 
@@ -52,6 +59,7 @@ impl WebFrameworkBuilder
     pub fn start(self) -> HttpResult<Listening>
     {
         let framework = WebFramework::new(
+            self.router,
             self.pages,
             self.page_not_found
         );
@@ -74,20 +82,23 @@ impl WebFrameworkBuilder
 
 struct WebFramework
 {
-    pages: Vec<(PathMatcher, PageHandler)>,
+    pages: Vec<(Box<RouteResolver>, PageHandler)>,
     page_not_found: PageHandler,
 }
 
 impl WebFramework
 {
     fn new(
-        pages: HashMap<Vec<String>, PageHandler>,
+        router: Box<Router>,
+        pages: HashMap<String, PageHandler>,
         page_not_found: PageHandler,
     ) -> Self
     {
-        let pages = pages.into_iter().map(|it| {
-            (PathMatcher::new(it.0), it.1)
-        }).collect();
+        let pages: Vec<(Box<RouteResolver>, PageHandler)> = pages.into_iter()
+            .map(|(s, h)| {
+                (router.resolver(s), h)
+            })
+            .collect();
 
         WebFramework {
             pages,
@@ -100,7 +111,7 @@ impl WebFramework
         let path = request.url.path();
 
         for &(ref matcher, ref handler) in &self.pages {
-            let data = match matcher.matches(&path) {
+            let data = match matcher.resolve(&path) {
                 None => continue,
                 Some(x) => x,
             };
@@ -118,45 +129,5 @@ impl WebFramework
         let content = handler(map);
 
         Ok(Response::with((status::NotFound, content)))
-    }
-}
-
-struct PathMatcher
-{
-    parts: Vec<String>,
-}
-
-impl PathMatcher
-{
-    fn new(parts: Vec<String>) -> Self
-    {
-        PathMatcher {
-            parts
-        }
-    }
-
-    fn matches(&self, path: &Vec<&str>) -> Option<HashMap<String, String>>
-    {
-        if self.parts.len() != path.len() {
-            return None;
-        }
-
-        let mut map = HashMap::new();
-        for i in 0..self.parts.len() {
-            let expected = self.parts[ i ].clone();
-            let actual = path[ i ];
-
-            if expected == *actual {
-                continue;
-            }
-            else if expected.starts_with( ":" ) {
-                map.insert(expected, actual.to_string());
-            }
-            else {
-                return None;
-            }
-        }
-
-        Some(map)
     }
 }
