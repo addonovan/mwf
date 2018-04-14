@@ -22,6 +22,7 @@ pub struct WebFrameworkBuilder
     pages: HashMap<String, PageHandler>,
     page_not_found: PageHandler,
     router: Box<Router>,
+    address: String,
 }
 
 impl WebFrameworkBuilder
@@ -36,6 +37,7 @@ impl WebFrameworkBuilder
             pages: HashMap::new(),
             page_not_found,
             router: Box::new(StandardRouter::new()),
+            address: "localhost:8080".to_owned(),
         }
     }
 
@@ -57,6 +59,12 @@ impl WebFrameworkBuilder
         self
     }
 
+    pub fn address<T: Into<String>>(mut self, addr: T) -> Self
+    {
+        self.address = addr.into();
+        self
+    }
+
     pub fn start(self) -> HttpResult<Listening>
     {
         let framework = WebFramework::new(
@@ -73,7 +81,7 @@ impl WebFrameworkBuilder
             framework.handle(m)
         };
 
-        Iron::new(call).http("localhost:8080")
+        Iron::new(call).http(self.address)
     }
 }
 

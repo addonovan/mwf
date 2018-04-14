@@ -1,8 +1,7 @@
 use std::fs::File;
 use std::convert::From;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use std::io;
 use std::io::prelude::*;
 use std::error::Error;
 
