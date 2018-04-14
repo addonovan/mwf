@@ -4,13 +4,14 @@ use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 
 use routing::*;
+use view::*;
 
 use iron::*;
 use iron::error::HttpResult;
 use iron::status;
 use iron::Request;
 
-pub type PageHandler = fn(HashMap<String, String>)-> String;
+pub type PageHandler = fn(RouteMap) -> ViewResult;
 
 //
 // The framework builder
@@ -28,7 +29,7 @@ impl WebFrameworkBuilder
     pub fn new() -> Self
     {
         let page_not_found = |_| {
-            "Page Not Found".to_owned()
+            View::from("Page Not Found")
         };
 
         WebFrameworkBuilder {
@@ -116,9 +117,17 @@ impl WebFramework
                 Some(x) => x,
             };
 
+            return match handler(data) {
+                Ok(content) => {
+                    let content: String = content.into();
+                    Ok(Response::with((status::Ok, content)))
+                },
 
-            let content = handler(data);
-            return Ok(Response::with((status::Ok, content)));
+                Err(reason) => {
+                    let reason: String = reason.to_string();
+                    Ok(Response::with((status::InternalServerError, reason)))
+                }
+            }
         }
 
         // couldn't find a page that would accept it
@@ -126,8 +135,16 @@ impl WebFramework
         map.insert( "path".to_owned(), path.join("/").to_owned() );
 
         let handler = self.page_not_found;
-        let content = handler(map);
+        match handler(map) {
+            Ok(content) => {
+                let content: String = content.into();
+                Ok(Response::with((status::NotFound, content)))
+            },
 
-        Ok(Response::with((status::NotFound, content)))
+            Err(reason) => {
+                let reason: String = reason.to_string();
+                Ok(Response::with((status::InternalServerError, reason)))
+            }
+        }
     }
 }

@@ -2,24 +2,30 @@ extern crate iron;
 
 mod mwf;
 mod routing;
+mod view;
+
+use std::convert::From;
+
+use view::View;
 use mwf::{WebFrameworkBuilder};
 
 fn main() {
     WebFrameworkBuilder::new()
         .on_page("/", |_| {
-            "This is the root page!".to_owned()
+            View::from("This is the root page!")
         })
         .on_page("/test", |_| {
-            "Hello world!".to_owned()
+            View::from("Hello, world!")
         })
         .on_page("/user/:name", |args| {
-            format!( "hello, {}!", args[":name"])
+            View::from(format!("hello, {}!", args[":name"]))
         })
-        .on_page_not_found(|args| {
-            format!(
-                "404 Not Found\n`{}` could not found found on this server",
-                args["path"]
-            )
+        .on_page("/file/:name", |args| {
+            let file_name = args[":name"].clone();
+            View::path(file_name)
+        })
+        .on_page_not_found(|_| {
+            View::from("404 not found :(")
         })
         .start()
         .unwrap();
