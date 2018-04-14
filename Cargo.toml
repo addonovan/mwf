@@ -6,5 +6,8 @@ authors = ["addonovan <austin@addonovan.com>"]
 [[example]]
 name = "hello_world"
 
+[[example]]
+name = "file_browser"
+
 [dependencies]
 iron = "0.6"
