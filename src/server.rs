@@ -11,15 +11,14 @@ use iron::error::HttpResult;
 use iron::status;
 use iron::Request;
 
+///Generates a page based on the routing information in the [RouteMap]
 pub type PageHandler = fn(RouteMap) -> ViewResult;
 
 //
 // The framework builder
 //
 
-/**
- * A builder-pattern for constructing a new [Server].
- */
+/// A builder-pattern for constructing a new [Server].
 pub struct ServerBuilder
 {
     pages: HashMap<String, PageHandler>,
@@ -30,13 +29,11 @@ pub struct ServerBuilder
 
 impl ServerBuilder
 {
-    /**
-     * Creates a new builder with the following defualts:
-     * * No bound pages
-     * * 404 page reads "Page Not Found"
-     * * [StandardRouter]
-     * * Bound to `localhost:8080`
-     */
+    /// Creates a new builder with the following defualts:
+    /// * No bound pages
+    /// * 404 page reads "Page Not Found"
+    /// * [StandardRouter]
+    /// * Bound to `localhost:8080`
     pub fn new() -> Self
     {
         let page_not_found = |_| {
@@ -51,48 +48,38 @@ impl ServerBuilder
         }
     }
 
-    /**
-     * Changes the [Router] instance to use to generate
-     * [RouteResolvers] once the web server is started.
-     */
+    /// Changes the [Router] instance to use to generate
+    /// [RouteResolvers] once the web server is started.
     pub fn router<T: 'static + Router>(mut self, router: T) -> Self
     {
         self.router = Box::new(router);
         self
     }
 
-    /**
-     * Binds a `handler` to the given route specification, `path`.
-     */
+    /// Binds a `handler` to the given route specification, `path`.
     pub fn on_page(mut self, path: &str, handler: PageHandler) -> Self
     {
         self.pages.insert(path.to_owned(), handler);
         self
     }
 
-    /**
-     * Binds a `handler` to the 404 page.
-     */
+    /// Binds a `handler` to the 404 page.
     pub fn on_page_not_found(mut self, handler: PageHandler) -> Self
     {
         self.page_not_found = handler;
         self
     }
 
-    /**
-     * Specifies the new `addr` that the server will run on.
-     */
+    /// Specifies the new `addr` that the server will run on.
     pub fn address<T: Into<String>>(mut self, addr: T) -> Self
     {
         self.address = addr.into();
         self
     }
 
-    /**
-     * Starts the http server described by this Server Builder.
-     *
-     * This is a blocking call.
-     */
+    /// Starts the http server described by this Server Builder.
+    ///
+    /// This is a blocking call.
     pub fn start(self) -> HttpResult<Listening>
     {
         let framework = Server::new(
@@ -117,9 +104,7 @@ impl ServerBuilder
 // The framework itself
 //
 
-/**
- * An instance of a running webserver.
- */
+/// An instance of a running webserver.
 struct Server
 {
     pages: Vec<(Box<RouteResolver>, PageHandler)>,
@@ -128,11 +113,9 @@ struct Server
 
 impl Server
 {
-    /**
-     * Creates a new server, which uses `router` to generate `RouteResolvers`
-     * for the given `pages` (which is done before the server is started),
-     * and which will serve `page_not_found` as its 404 page.
-     */
+    /// Creates a new server, which uses `router` to generate `RouteResolvers`
+    /// for the given `pages` (which is done before the server is started),
+    /// and which will serve `page_not_found` as its 404 page.
     fn new(
         router: Box<Router>,
         pages: HashMap<String, PageHandler>,
@@ -152,9 +135,7 @@ impl Server
         }
     }
 
-    /**
-     * Handles an incoming `request`.
-     */
+    /// Handles an incoming `request`.
     fn handle(&self, request: &mut Request) -> IronResult<Response>
     {
         let route = request.url.path();

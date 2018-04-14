@@ -1,57 +1,45 @@
 use std::collections::HashMap;
 
-/** Maps a route's variables to their respective values */
+/// Maps a route's variables to their respective values
 pub type RouteMap = HashMap<String, String>;
 
-/**
- * Creates instances of [RouteResolver]s, so the way pages are
- * routed can be easily changed.
- *
- * See [StandardRouter] for an example of what `Routers` do.
- */
+/// Creates instances of [RouteResolver]s, so the way pages are
+/// routed can be easily changed.
+///
+/// See [StandardRouter] for an example of what `Routers` do.
 pub trait Router
     where Self: Send + Sync
 {
-    /**
-     * Creates a new `Router` instance using the `route_spec` which is
-     * given by the user when registering a page callback.
-     */
+    /// Creates a new `Router` instance using the `route_spec` which is
+    /// given by the user when registering a page callback.
     fn resolver(&self, route_spec: String) -> Box<RouteResolver>;
 }
 
-/**
- * Resolves a route.
- */
+/// Resolves a route.
 pub trait RouteResolver
     where Self: Send + Sync
 {
-    /**
-     * Resolves a request `route` to returns a `RouteMap` binding
-     * any route-specific information to a key.
-     */
+    /// Resolves a request `route` to returns a `RouteMap` binding
+    /// any route-specific information to a key.
     fn resolve(&self, route: &Vec<&str>) -> Option<RouteMap>;
 }
 
-/**
- * The standard routing algorithm.
- *
- * A route is matched literally, except for sections which begin
- * with a `:`, which are treated as variables. The actual text in
- * the position of these route variables will be insert into the
- * `RouteMap` with the variable's name (including the leading `:`).
- *
- * If there are multiple routing variables in the same routing
- * specification, then this will `panic!` when resolving.
- */
+/// The standard routing algorithm.
+///
+/// A route is matched literally, except for sections which begin
+/// with a `:`, which are treated as variables. The actual text in
+/// the position of these route variables will be insert into the
+/// `RouteMap` with the variable's name (including the leading `:`).
+///
+/// If there are multiple routing variables in the same routing
+/// specification, then this will `panic!` when resolving.
 pub struct StandardRouter;
 
-/**
- * A resolver which follows the standard resolving method
- * described by [StandardRouter].
- */
+/// A resolver which follows the standard resolving method
+/// described by [StandardRouter].
 pub struct StandardResolver
 {
-    /** The routing specification */
+    /// The routing specification
     route: Vec<String>
 }
 

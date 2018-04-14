@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["addonovan <austin@addonovan.com>"]
 
 [[example]]
-name = "simple_server"
+name = "hello_world"
 
 [dependencies]
 iron = "0.6"

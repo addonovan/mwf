@@ -7,10 +7,8 @@ use std::error::Error;
 
 pub type ViewResult = Result<View, Box<Error>>;
 
-/**
- * A view for the website. This is simply something
- * which evaluates to a string.
- */
+/// A view for the website. This is simply something
+/// which evaluates to a string.
 pub struct View
 {
     content: String
@@ -18,9 +16,7 @@ pub struct View
 
 impl View
 {
-    /**
-     * Attempts to read the file described by the given `path`.
-     */
+    /// Attempts to read the file described by the given `path`.
     pub fn path<T: Into<PathBuf>>(path: T) -> ViewResult
     {
         let mut file = File::open(path.into().as_path())?;
@@ -31,13 +27,11 @@ impl View
         })
     }
 
-    /**
-     * Converts anything which can be converted `Into` a `View`, and
-     * simply runs its `into` method, then returns an `Ok` for the
-     * [ViewResult].
-     *
-     * Literally it's just `Ok(content.into())`
-     */
+    /// Converts anything which can be converted `Into` a `View`, and
+    /// simply runs its `into` method, then returns an `Ok` for the
+    /// [ViewResult].
+    ///
+    /// Literally it's just `Ok(content.into())`
     pub fn from<T: Into<View>>(content: T) -> ViewResult
     {
         Ok(content.into())
