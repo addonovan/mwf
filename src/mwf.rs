@@ -17,7 +17,10 @@ pub type PageHandler = fn(RouteMap) -> ViewResult;
 // The framework builder
 //
 
-pub struct WebFrameworkBuilder
+/**
+ * A builder-pattern for constructing a new [Server].
+ */
+pub struct ServerBuilder
 {
     pages: HashMap<String, PageHandler>,
     page_not_found: PageHandler,
@@ -25,15 +28,22 @@ pub struct WebFrameworkBuilder
     address: String,
 }
 
-impl WebFrameworkBuilder
+impl ServerBuilder
 {
+    /**
+     * Creates a new builder with the following defualts:
+     * * No bound pages
+     * * 404 page reads "Page Not Found"
+     * * [StandardRouter]
+     * * Bound to `localhost:8080`
+     */
     pub fn new() -> Self
     {
         let page_not_found = |_| {
             View::from("Page Not Found")
         };
 
-        WebFrameworkBuilder {
+        ServerBuilder {
             pages: HashMap::new(),
             page_not_found,
             router: Box::new(StandardRouter::new()),
@@ -41,33 +51,51 @@ impl WebFrameworkBuilder
         }
     }
 
+    /**
+     * Changes the [Router] instance to use to generate
+     * [RouteResolvers] once the web server is started.
+     */
     pub fn router<T: 'static + Router>(mut self, router: T) -> Self
     {
         self.router = Box::new(router);
         self
     }
 
+    /**
+     * Binds a `handler` to the given route specification, `path`.
+     */
     pub fn on_page(mut self, path: &str, handler: PageHandler) -> Self
     {
         self.pages.insert(path.to_owned(), handler);
         self
     }
 
+    /**
+     * Binds a `handler` to the 404 page.
+     */
     pub fn on_page_not_found(mut self, handler: PageHandler) -> Self
     {
         self.page_not_found = handler;
         self
     }
 
+    /**
+     * Specifies the new `addr` that the server will run on.
+     */
     pub fn address<T: Into<String>>(mut self, addr: T) -> Self
     {
         self.address = addr.into();
         self
     }
 
+    /**
+     * Starts the http server described by this Server Builder.
+     *
+     * This is a blocking call.
+     */
     pub fn start(self) -> HttpResult<Listening>
     {
-        let framework = WebFramework::new(
+        let framework = Server::new(
             self.router,
             self.pages,
             self.page_not_found
@@ -89,42 +117,56 @@ impl WebFrameworkBuilder
 // The framework itself
 //
 
-struct WebFramework
+/**
+ * An instance of a running webserver.
+ */
+struct Server
 {
     pages: Vec<(Box<RouteResolver>, PageHandler)>,
     page_not_found: PageHandler,
 }
 
-impl WebFramework
+impl Server
 {
+    /**
+     * Creates a new server, which uses `router` to generate `RouteResolvers`
+     * for the given `pages` (which is done before the server is started),
+     * and which will serve `page_not_found` as its 404 page.
+     */
     fn new(
         router: Box<Router>,
         pages: HashMap<String, PageHandler>,
         page_not_found: PageHandler,
     ) -> Self
     {
-        let pages: Vec<(Box<RouteResolver>, PageHandler)> = pages.into_iter()
+        // creates RouteResolvers for all of the route specifications
+        let pages = pages.into_iter()
             .map(|(s, h)| {
                 (router.resolver(s), h)
             })
             .collect();
 
-        WebFramework {
+        Server {
             pages,
             page_not_found,
         }
     }
 
+    /**
+     * Handles an incoming `request`.
+     */
     fn handle(&self, request: &mut Request) -> IronResult<Response>
     {
-        let path = request.url.path();
+        let route = request.url.path();
 
-        for &(ref matcher, ref handler) in &self.pages {
-            let data = match matcher.resolve(&path) {
+        for &(ref resolver, ref handler) in &self.pages {
+            // see if this resolver successfully matches the given route
+            let data = match resolver.resolve(&route) {
                 None => continue,
                 Some(x) => x,
             };
 
+            // safely get the View from the handler
             return match handler(data) {
                 Ok(content) => {
                     let content: String = content.into();
@@ -140,8 +182,9 @@ impl WebFramework
 
         // couldn't find a page that would accept it
         let mut map = HashMap::new();
-        map.insert( "path".to_owned(), path.join("/").to_owned() );
+        map.insert( "path".to_owned(), route.join("/").to_owned() );
 
+        // default to the 404 page
         let handler = self.page_not_found;
         match handler(map) {
             Ok(content) => {

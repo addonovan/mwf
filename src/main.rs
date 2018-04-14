@@ -5,10 +5,10 @@ mod routing;
 mod view;
 
 use view::View;
-use mwf::{WebFrameworkBuilder};
+use mwf::{ServerBuilder};
 
 fn main() {
-    WebFrameworkBuilder::new()
+    ServerBuilder::new()
         .on_page("/", |_| {
             View::from("This is the root page!")
         })
@@ -25,7 +25,14 @@ fn main() {
             View::path(file_name)
         })
         .on_page_not_found(|_| {
-            View::from("404 not found :(")
+            View::from(
+                r#"
+                    OOPSIE WOOPSIE!!
+                    Uwu We made a fucky wucky!!
+                    A wittle fucko boingo!
+                    The code monkeys at our headquarters are working VEWY HAWD to fix this!
+                "#
+            )
         })
         .start()
         .unwrap();
