@@ -12,7 +12,7 @@ use iron::status;
 use iron::Request;
 
 ///Generates a page based on the routing information in the [RouteMap]
-pub type PageHandler = fn(RouteMap) -> ViewResult;
+pub type PageHandler = Box<Fn(RouteMap) -> ViewResult + Send + Sync>;
 
 //
 // The framework builder
@@ -39,6 +39,7 @@ impl ServerBuilder
         let page_not_found = |_| {
             View::from("Page Not Found")
         };
+        let page_not_found = Box::new(page_not_found);
 
         ServerBuilder {
             pages: HashMap::new(),
@@ -57,16 +58,25 @@ impl ServerBuilder
     }
 
     /// Binds a `handler` to the given route specification, `path`.
-    pub fn on_page(mut self, path: &str, handler: PageHandler) -> Self
+    pub fn on_page<F: 'static + Send + Sync>(
+        mut self,
+        path: &str,
+        handler: F
+    ) -> Self
+        where F: Fn(RouteMap) -> ViewResult
     {
-        self.pages.insert(path.to_owned(), handler);
+        self.pages.insert(path.to_owned(), Box::new(handler));
         self
     }
 
     /// Binds a `handler` to the 404 page.
-    pub fn on_page_not_found(mut self, handler: PageHandler) -> Self
+    pub fn on_page_not_found<F: 'static + Send + Sync>(
+        mut self,
+        handler: F
+    ) -> Self
+        where F: Fn(RouteMap) -> ViewResult
     {
-        self.page_not_found = handler;
+        self.page_not_found = Box::new(handler);
         self
     }
 
@@ -166,7 +176,7 @@ impl Server
         map.insert( "path".to_owned(), route.join("/").to_owned() );
 
         // default to the 404 page
-        let handler = self.page_not_found;
+        let handler = &self.page_not_found;
         match handler(map) {
             Ok(content) => {
                 let content: String = content.into();
