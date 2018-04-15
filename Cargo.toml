@@ -9,5 +9,8 @@ name = "hello_world"
 [[example]]
 name = "file_browser"
 
+[[example]]
+name = "simple_portal"
+
 [dependencies]
 iron = "0.6"
