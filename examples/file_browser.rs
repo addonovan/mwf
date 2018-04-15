@@ -119,9 +119,9 @@ impl Router for FileRouter
                 if it.is_empty() {
                     None
                 }
-                    else {
-                        Some(it)
-                    }
+                else {
+                    Some(it)
+                }
             })
             .collect();
 
