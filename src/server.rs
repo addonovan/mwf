@@ -65,6 +65,11 @@ impl ServerBuilder
     ) -> Self
         where F: Fn(RouteMap) -> ViewResult
     {
+        // clean up the path first
+        // remove leading and trailing slashes (as they aren't necessary)
+        let path = path.trim_left_matches("/")
+            .trim_right_matches("/");
+
         self.pages.insert(path.to_owned(), Box::new(handler));
         self
     }

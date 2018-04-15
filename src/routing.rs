@@ -55,9 +55,18 @@ impl Router for StandardRouter
 {
     fn resolver(&self, route_spec: String) -> Box<RouteResolver>
     {
+        // route specs are guaranteed to never have a leading or trailing /
         let route = route_spec.split("/")
-            .skip(1) // skip the leading root
             .map(String::from)
+            // treat empty strings as meaning `None`, and remove them
+            .filter_map(|it| {
+                if it.is_empty() {
+                    None
+                }
+                else {
+                    Some(it)
+                }
+            })
             .collect();
 
         let resolver = StandardResolver {
@@ -112,31 +121,31 @@ mod test
     fn standard_matches_root()
     {
         let router = StandardRouter::new();
-        let resolver = router.resolver("/".to_owned());
-        assert!(resolver.resolve(&vec![""]).is_some());
-        assert!(resolver.resolve(&vec!["test", ""]).is_none());
-        assert!(resolver.resolve(&vec!["test", "2", ""]).is_none());
+        let resolver = router.resolver("".to_owned());
+        assert!(resolver.resolve(&vec![]).is_some());
+        assert!(resolver.resolve(&vec!["test"]).is_none());
+        assert!(resolver.resolve(&vec!["test", "2"]).is_none());
     }
 
     #[test]
     fn standard_matches_literals()
     {
         let router = StandardRouter::new();
-        let resolver = router.resolver("/test/".to_owned());
-        assert!(resolver.resolve(&vec![""]).is_none());
-        assert!(resolver.resolve(&vec!["test", ""]).is_some());
-        assert!(resolver.resolve(&vec!["test", "2", ""]).is_none());
+        let resolver = router.resolver("test".to_owned());
+        assert!(resolver.resolve(&vec![]).is_none());
+        assert!(resolver.resolve(&vec!["test"]).is_some());
+        assert!(resolver.resolve(&vec!["test", "2"]).is_none());
     }
 
     #[test]
     fn standard_matches_rvars()
     {
         let router = StandardRouter::new();
-        let resolver = router.resolver("/:test/".to_owned());
-        assert!(resolver.resolve(&vec![""]).is_none());
-        assert!(resolver.resolve(&vec!["test", "2", ""]).is_none());
+        let resolver = router.resolver(":test".to_owned());
+        assert!(resolver.resolve(&vec![]).is_none());
+        assert!(resolver.resolve(&vec!["test", "2"]).is_none());
 
-        match resolver.resolve(&vec!["aaa", ""]) {
+        match resolver.resolve(&vec!["aaa"]) {
             None => assert!(false),
             Some(args) => {
                 assert_eq!(1, args.len());
@@ -149,11 +158,11 @@ mod test
     fn standard_matches_all()
     {
         let router = StandardRouter::new();
-        let resolver = router.resolver("/user/:name/:action".to_owned());
+        let resolver = router.resolver("user/:name/:action".to_owned());
 
-        assert!(resolver.resolve(&vec![""]).is_none());
+        assert!(resolver.resolve(&vec![]).is_none());
         assert!(resolver.resolve(
-                &vec!["files", "bad", "badstuff.zip", ""]
+                &vec!["files", "bad", "badstuff.zip"]
         ).is_none());
 
         match resolver.resolve(&vec!["user", "austin", "edit"]) {
