@@ -153,7 +153,17 @@ impl Server
     /// Handles an incoming `request`.
     fn handle(&self, request: &mut Request) -> IronResult<Response>
     {
-        let route = request.url.path();
+        let route = request.url.path()
+            .iter()
+            .filter_map(|it| {
+                if it.is_empty() {
+                    None
+                }
+                else {
+                    Some(*it)
+                }
+            })
+            .collect();
 
         for &(ref resolver, ref handler) in &self.pages {
             // see if this resolver successfully matches the given route

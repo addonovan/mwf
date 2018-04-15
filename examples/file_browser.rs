@@ -45,9 +45,13 @@ fn main()
 {
     ServerBuilder::new()
         .router(FileRouter::new())
+        // this will match any route requested by the server
         .on_page("/*", |args| {
             let file_path = args["file"].clone();
 
+            // convert the requested file into a PathBuf
+            // if it's empty, that means we're at the current
+            // working directory
             let file: PathBuf;
             if file_path.is_empty() {
                 file = ".".into();
@@ -56,21 +60,32 @@ fn main()
                 file = args["file"].clone().into();
             }
 
+            // if it's a file, we'll display the contents of the file
             if file.is_file() {
                 View::path(file_path)
             }
+            // if it's a directory, we'll list its contents
             else if file.is_dir() {
                 let mut contents = Vec::new();
                 for entry in file.read_dir().unwrap() {
                     if let Ok(entry) = entry {
+
+                        // sometimes rust is very annoying
+                        // Path -> &OsStr -> OsString -> String
+                        // If you know of an easier way, please file a PR and
+                        // let me know, because this is absurd in my opinion
                         let entry = entry.path();
-                        let entry = entry.to_str().unwrap();
-                        contents.push(entry.to_owned());
+                        let entry = entry.file_name().unwrap();
+                        let entry = entry.to_owned();
+                        let entry = entry.into_string().unwrap();
+
+                        contents.push(entry);
                     }
                 }
 
                 View::from(contents.join("\n"))
             }
+            // if it's neither, idk say it's not real
             else {
                 let msg = format!("file \"{}\" does not exist", file_path);
                 View::from(msg)
@@ -82,6 +97,10 @@ fn main()
 
 impl FileRouter
 {
+    /// Creates a new FileRouter
+    ///
+    /// This is just because I prefer `FileRouter::new()` over
+    /// `FileRouter {}`.
     fn new() -> Self
     {
         FileRouter {}
@@ -92,10 +111,18 @@ impl Router for FileRouter
 {
     fn resolver(&self, route_spec: String) -> Box<RouteResolver>
     {
-        // split the string on all slashes
+        // route specs are guaranteed to never have a leading or trailing /
         let tokens: Vec<String> = route_spec.split("/")
-            .skip(1) // skip leading space
             .map(String::from)
+            // treat empty strings as meaning `None`, and remove them
+            .filter_map(|it| {
+                if it.is_empty() {
+                    None
+                }
+                    else {
+                        Some(it)
+                    }
+            })
             .collect();
 
         // ensure that no literals follow a star
@@ -116,6 +143,7 @@ impl Router for FileRouter
 
 impl FileResolver
 {
+    /// Creates a new FileResolver using the given string tokens.
     pub fn new(tokens: Vec<String>) -> Self
     {
         FileResolver {

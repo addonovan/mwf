@@ -47,6 +47,9 @@ fn main()
     let context4 = portal.clone();
 
     ServerBuilder::new()
+        // if we're just supplied the user's id, we'll just call the view_user
+        // method on the UserPortal (everything else is just boilerplate and
+        // error handling)
         .on_page("/user/:id/", move |args| {
             let id: u32 = args[":id"].parse()?;
 
@@ -59,6 +62,7 @@ fn main()
 
             View::from(text)
         })
+        // if we're asked to greet the user, we'll say hi to them
         .on_page("/user/:id/greet", move |args| {
             let id: u32 = args[":id"].parse()?;
             let portal = context2.lock().unwrap();
@@ -73,6 +77,8 @@ fn main()
 
             View::from(text)
         })
+        // if we're supposed to edit the id of the user, we also need the
+        // new id. Then, we'll change the user's id
         .on_page("/user/:id/edit/id/:new_id", move |args| {
             let id: u32 = args[":id"].parse()?;
             let new_id: u32 = args[":new_id"].parse()?;
@@ -92,6 +98,7 @@ fn main()
 
             View::from("Success!")
         })
+        // same as above, but for the user's name
         .on_page("/user/:id/edit/name/:new_name", move |args| {
             let id: u32 = args[":id"].parse()?;
             let new_name = args[":new_name"].clone();
