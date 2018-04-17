@@ -19,6 +19,29 @@ pub struct View
 
 impl View
 {
+    /// Constructs a new view with the given `content` and the mime type
+    /// "text/plain".
+    ///
+    /// You should avoid using this directly, if one of the `into()` methods
+    /// applies.
+    fn new(content: String) -> View
+    {
+        View {
+            content,
+            mime: "text/plain".parse().unwrap(),
+        }
+    }
+
+    /// Updates the mime type to the given [mime].
+    pub fn mime(&mut self, mime: Mime)
+    {
+        self.mime = mime;
+    }
+}
+
+// Convenience Methods for View construction
+impl View
+{
     /// Attempts to read the file described by the given `path`.
     pub fn path<T: Into<PathBuf>>(path: T) -> ViewResult
     {
@@ -29,20 +52,24 @@ impl View
         let mut content = String::new();
         file.read_to_string(&mut content)?;
 
+        // the contents of the view will, for sure, be the contents of the
+        // file. But the mimetype might change, so we have to be mutable
+        let mut view: View = content.into();
+
         // check the extension on the file, if it's a valid html-like
         // extension, then we'll display it as html, otherwise, we'll
         // display it as plain text
         if let Some(ext) = path.extension() {
+
+            // convert the extension to lowercase, that way we can be case
+            // insensitive when checking if it's an html file.
             let ext = ext.to_str().unwrap().to_ascii_lowercase();
             if ext == "html" || ext == "htm" {
-                return Ok(View {
-                    content,
-                    mime: "text/html".parse().unwrap(),
-                });
+                view.mime("text/html".parse().unwrap());
             }
         }
 
-        View::from(content)
+        Ok(view)
     }
 
     /// Converts anything which can be converted `Into` a `View`, and
@@ -54,7 +81,6 @@ impl View
     {
         Ok(content.into())
     }
-
 }
 
 impl Into<(String, Mime)> for View
@@ -69,10 +95,7 @@ impl From<&'static str> for View
 {
     fn from(content: &str) -> Self
     {
-        View {
-            content: content.to_owned(),
-            mime: "text/plain".parse().unwrap(),
-        }
+        View::new(content.to_owned())
     }
 }
 
@@ -80,10 +103,7 @@ impl From<String> for View
 {
     fn from(content: String) -> Self
     {
-        View {
-            content,
-            mime: "text/plain".parse().unwrap(),
-        }
+        View::new(content)
     }
 }
 
