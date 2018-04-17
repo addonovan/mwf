@@ -5,13 +5,16 @@ use std::path::PathBuf;
 use std::io::prelude::*;
 use std::error::Error;
 
+use iron::mime::Mime;
+
 pub type ViewResult = Result<View, Box<Error>>;
 
 /// A view for the website. This is simply something
 /// which evaluates to a string.
 pub struct View
 {
-    content: String
+    content: String,
+    mime: Mime,
 }
 
 impl View
@@ -19,12 +22,27 @@ impl View
     /// Attempts to read the file described by the given `path`.
     pub fn path<T: Into<PathBuf>>(path: T) -> ViewResult
     {
-        let mut file = File::open(path.into().as_path())?;
+        let path = path.into();
+        let path = path.as_path();
+
+        let mut file = File::open(path)?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
-        Ok(View {
-            content
-        })
+
+        // check the extension on the file, if it's a valid html-like
+        // extension, then we'll display it as html, otherwise, we'll
+        // display it as plain text
+        if let Some(ext) = path.extension() {
+            let ext = ext.to_str().unwrap().to_ascii_lowercase();
+            if ext == "html" || ext == "htm" {
+                return Ok(View {
+                    content,
+                    mime: "text/html".parse().unwrap(),
+                });
+            }
+        }
+
+        View::from(content)
     }
 
     /// Converts anything which can be converted `Into` a `View`, and
@@ -36,13 +54,14 @@ impl View
     {
         Ok(content.into())
     }
+
 }
 
-impl Into<String> for View
+impl Into<(String, Mime)> for View
 {
-    fn into(self) -> String
+    fn into(self) -> (String, Mime)
     {
-        self.content
+        (self.content, self.mime)
     }
 }
 
@@ -51,7 +70,8 @@ impl From<&'static str> for View
     fn from(content: &str) -> Self
     {
         View {
-            content: content.to_owned()
+            content: content.to_owned(),
+            mime: "text/plain".parse().unwrap(),
         }
     }
 }
@@ -61,7 +81,8 @@ impl From<String> for View
     fn from(content: String) -> Self
     {
         View {
-            content
+            content,
+            mime: "text/plain".parse().unwrap(),
         }
     }
 }

@@ -10,6 +10,8 @@ use iron::*;
 use iron::error::HttpResult;
 use iron::status;
 use iron::Request;
+use iron::mime::*;
+use iron::headers::ContentType;
 
 ///Generates a page based on the routing information in the [RouteMap]
 pub type PageHandler = Box<Fn(RouteMap) -> ViewResult + Send + Sync>;
@@ -174,9 +176,13 @@ impl Server
 
             // safely get the View from the handler
             return match handler(data) {
-                Ok(content) => {
-                    let content: String = content.into();
-                    Ok(Response::with((status::Ok, content)))
+                Ok(view) => {
+                    let (content, mime) = view.into();
+
+                    let mut response = Response::with((status::Ok, content));
+                    response.headers.set(ContentType(mime));
+
+                    Ok(response)
                 },
 
                 Err(reason) => {
@@ -193,9 +199,13 @@ impl Server
         // default to the 404 page
         let handler = &self.page_not_found;
         match handler(map) {
-            Ok(content) => {
-                let content: String = content.into();
-                Ok(Response::with((status::NotFound, content)))
+            Ok(view) => {
+                let (content, mime) = view.into();
+
+                let mut response = Response::with((status::NotFound, content));
+                response.headers.set(ContentType(mime));
+
+                Ok(response)
             },
 
             Err(reason) => {
