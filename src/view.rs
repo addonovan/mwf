@@ -111,6 +111,7 @@ impl From<String> for View
 mod test
 {
     use view::*;
+    use iron::mime::{Mime, TopLevel, SubLevel};
 
     #[test]
     fn from_path()
@@ -120,7 +121,16 @@ mod test
         let expected = expected.to_owned();
 
         let view = View::path(path).unwrap();
-        assert_eq!(expected, view.content);
+        let (content, mime) = view.into();
+        assert_eq!(expected, content);
+
+        // make sure the mime type matches text/plain
+        match mime {
+            Mime(TopLevel::Text, SubLevel::Plain, _) => {},
+            _ => {
+                assert!(false);
+            }
+        }
 
         assert!(View::path("src/rs.view").is_err());
     }
@@ -129,8 +139,11 @@ mod test
     fn from_string()
     {
         let input = "a";
-        let expected = input.to_owned();
-        assert_eq!(expected, View::from(input).unwrap().content);
+        let expected = input.clone();
+
+        let view = View::from(input).unwrap();
+        let (content, _) = view.into();
+        assert_eq!(expected, content);
     }
 
     #[test]
@@ -138,15 +151,27 @@ mod test
     {
         let input = "a".to_owned();
         let expected = input.clone();
-        assert_eq!(expected, View::from(input).unwrap().content);
+
+        let view = View::from(input).unwrap();
+        let (content, _) = view.into();
+        assert_eq!(expected, content);
     }
 
     #[test]
-    fn into_string()
+    fn into_tuple()
     {
         let input = "a".to_owned();
         let expected = input.clone();
-        let view: String = View::from(input).unwrap().into();
-        assert_eq!(expected, view);
+
+        let view = View::from(input).unwrap();
+        let (content, mime) = view.into();
+
+        assert_eq!(expected, content);
+        match mime {
+            Mime(TopLevel::Text, SubLevel::Plain, _) => {},
+            _ => {
+                assert!(false);
+            }
+        }
     }
 }
