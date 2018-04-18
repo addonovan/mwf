@@ -103,8 +103,13 @@ pub struct Router
 /// Describes the parts of a route specification in a [StandardResolver].
 enum RouteSpec
 {
+    /// A required string literal. The interior value is the string to match.
     Literal(String),
+
+    /// A required variable. The interior value is the name of the variable.
     Variable(String),
+
+    /// An optional variable. The interior value is the name of the variable.
     Optional(String),
 }
 
@@ -125,9 +130,10 @@ impl RouterBuilder
         }
     }
 
-    pub fn constructor(&mut self, resolver: Box<ResolverConstructor>)
+    /// Changes the `constructor` to use when creating new resolvers.
+    pub fn constructor(&mut self, constructor: Box<ResolverConstructor>)
     {
-        self.constructor = resolver;
+        self.constructor = constructor;
     }
 
     /// Binds a URL route to an action in the receiver object.

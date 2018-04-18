@@ -38,6 +38,8 @@ impl ServerBuilder
         }
     }
 
+    /// Assigns a new `resolver` to be used in place of the current one. The
+    /// function must be a constructor which creates [Box]es of [Resolver]s.
     pub fn resolver<T: 'static>(mut self, resolver: T) -> Self
         where T: Fn(Vec<String>) -> Box<Resolver>
     {
