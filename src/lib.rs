@@ -10,3 +10,7 @@ pub mod routing;
 // Export as mwf::*
 mod view;
 pub use self::view::*;
+
+// Export as mwf::*
+mod handle;
+pub use self::handle::*;

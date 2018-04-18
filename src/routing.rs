@@ -1,22 +1,14 @@
+extern crate iron;
+
 use std::collections::HashMap;
+use view::ViewResult;
+use handle::RequestHandler;
 
 /// Maps a route's variables to their respective values
 pub type RouteMap = HashMap<String, String>;
 
-/// Creates instances of [RouteResolver]s, so the way pages are
-/// routed can be easily changed.
-///
-/// See [StandardRouter] for an example of what `Routers` do.
-pub trait Router
-    where Self: Send + Sync
-{
-    /// Creates a new `Router` instance using the `route_spec` which is
-    /// given by the user when registering a page callback.
-    fn resolver(&self, route_spec: String) -> Box<RouteResolver>;
-}
-
 /// Resolves a route.
-pub trait RouteResolver
+pub trait Resolver
     where Self: Send + Sync
 {
     /// Resolves a request `route` to returns a `RouteMap` binding
@@ -24,41 +16,42 @@ pub trait RouteResolver
     fn resolve(&self, route: &Vec<&str>) -> Option<RouteMap>;
 }
 
-/// The standard routing algorithm.
-///
-/// A route is matched literally, except for sections which begin
-/// with a `:`, which are treated as variables. The actual text in
-/// the position of these route variables will be insert into the
-/// `RouteMap` with the variable's name (including the leading `:`).
-///
-/// If there are multiple routing variables in the same routing
-/// specification, then this will `panic!` when resolving.
-pub struct StandardRouter;
+/// The constructor for a [Resolver].
+type ResolverConstructor = Fn(Vec<String>) -> Box<Resolver>;
 
-/// A resolver which follows the standard resolving method
-/// described by [StandardRouter].
-pub struct StandardResolver
+pub struct Router
 {
-    /// The routing specification
-    route: Vec<String>
+    resolvers: Vec<(Box<Resolver>, Box<RequestHandler>)>,
 }
 
-impl StandardRouter
+pub struct RouterBuilder
 {
-    pub fn new() -> Self
+    /// The constructor used to create new resolvers.
+    constructor: Box<ResolverConstructor>,
+
+    resolvers: Vec<(Box<Resolver>, Box<RequestHandler>)>,
+}
+
+impl RouterBuilder
+{
+    pub fn new() -> RouterBuilder
     {
-        StandardRouter {}
+        RouterBuilder {
+            constructor: Box::new(StandardResolver::new),
+            resolvers: Vec::new(),
+        }
     }
-}
 
-impl Router for StandardRouter
-{
-    fn resolver(&self, route_spec: String) -> Box<RouteResolver>
+    /// Binds a URL route to an action in the receiver object.
+    pub fn bind<T: Into<String>, H: 'static>(&mut self, path: T, handler: H)
+        where H: RequestHandler
     {
-        // route specs are guaranteed to never have a leading or trailing /
-        let route = route_spec.split("/")
+        let path: String = path.into();
+
+        // now we split on all of the slashes, remove empty strings and convert
+        // to owned strings
+        let path: Vec<String> = path.split("/")
             .map(String::from)
-            // treat empty strings as meaning `None`, and remove them
             .filter_map(|it| {
                 if it.is_empty() {
                     None
@@ -69,14 +62,79 @@ impl Router for StandardRouter
             })
             .collect();
 
-        let resolver = StandardResolver {
-            route
-        };
-        Box::new(resolver)
+        // now, we need to instance a new resolver using our constructor
+        // and add it to our list of resolvers
+        let constructor = &self.constructor;
+        let resolver = constructor(path);
+        let handler = Box::new(handler);
+        self.resolvers.push((resolver, handler));
     }
 }
 
-impl RouteResolver for StandardResolver
+impl Into<Router> for RouterBuilder
+{
+    fn into(self) -> Router
+    {
+        Router {
+            resolvers: self.resolvers
+        }
+    }
+}
+
+impl Router
+{
+    pub fn handle(&self, request: &iron::Request) -> Option<ViewResult>
+    {
+        // remove all of the empty strings.
+        let route: Vec<&str> = request.url.path()
+            .iter()
+            .filter_map(|it| {
+                if it.is_empty() {
+                    None
+                }
+                    else {
+                        Some(*it)
+                    }
+            })
+            .collect();
+
+        for entry in self.resolvers.iter() {
+            let &(ref resolver, ref handler) = entry;
+
+            // if we can successfully resolve this route, then
+            // we can just return whatever the handler yields.
+            let data = match resolver.resolve(&route) {
+                None => continue,
+                Some(x) => x,
+            };
+
+            return Some(handler.handle(data));
+        }
+
+        // we weren't able to find anything to handle the request
+        None
+    }
+}
+
+/// A resolver which follows the standard resolving method
+/// described by [StandardRouter].
+pub struct StandardResolver
+{
+    /// The routing specification
+    route: Vec<String>
+}
+
+impl StandardResolver
+{
+    fn new(route: Vec<String>) -> Box<Resolver>
+    {
+        Box::new(StandardResolver {
+            route
+        })
+    }
+}
+
+impl Resolver for StandardResolver
 {
     fn resolve(&self, route: &Vec<&str>) -> Option<RouteMap>
     {
