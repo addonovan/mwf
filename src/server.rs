@@ -10,7 +10,6 @@ use iron::*;
 use iron::error::HttpResult;
 use iron::status;
 use iron::Request;
-use iron::mime::*;
 use iron::headers::ContentType;
 
 ///Generates a page based on the routing information in the [RouteMap]
