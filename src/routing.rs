@@ -7,7 +7,7 @@ use handle::RequestHandler;
 /// Maps a route's variables to their respective values
 pub type RouteMap = HashMap<String, String>;
 
-/// Resolves a route.
+/// Resolves a route by using the path specification supplied to it.
 pub trait Resolver
     where Self: Send + Sync
 {
@@ -19,21 +19,104 @@ pub trait Resolver
 /// The constructor for a [Resolver].
 type ResolverConstructor = Fn(Vec<String>) -> Box<Resolver>;
 
-pub struct Router
+/// A resolver which follows the standard resolving method
+/// described by [StandardRouter].
+///
+/// The standard resolver has three possible URL tokens:
+/// * `Literal`: Matches the text given exactly. This is the default
+/// * `Variable`: Matches any text and stores the actual value in the [RouteMap]
+///   with the variable's name. These are denoted with a leading `:`, which is
+///   included in the variable's name in the [RouteMap].
+/// * `Optional`: Matches any text (or none at all) and saves the value in the
+///   RouteMap, like the variable matcher. This is denoted with a leading `:`
+///   and a trailing `?`, both of which are used in the variable's name.
+///
+/// Some examples of route specifications for a standard resolver, and their
+/// corresponding `RouteMap`:
+///
+/// Specification: `/foo`
+/// Route           | Matches | Route Map Entries
+/// --------------- | ------- | -----------------
+/// `/foo`          | Yes     | `{}`
+/// `/foo/bar`      | No      |
+/// `/foo/bar/baz`  | No      |
+/// `/foo/bar/qux`  | No      |
+/// `/foo/baz`      | No      |
+///
+/// Specification `/foo/:bar`
+/// Route           | Matches | Route Map Entries
+/// --------------- | ------- | -----------------
+/// `/foo`          | No      |
+/// `/foo/bar`      | Yes     | `{":bar": "bar"}`
+/// `/foo/bar/baz`  | No      |
+/// `/foo/bar/qux`  | No      |
+/// `/foo/baz`      | Yes     | `{":bar": "baz"}`
+///
+/// Specification `/foo/:bar?`
+/// Route           | Matches | Route Map Entries
+/// --------------- | ------- | -----------------
+/// `/foo`          | Yes     | `{":bar": ""}`
+/// `/foo/bar`      | Yes     | `{":bar": "bar"}`
+/// `/foo/bar/baz`  | No      |
+/// `/foo/bar/qux`  | No      |
+/// `/foo/baz`      | Yes     | `{":bar": "baz"}`
+///
+/// Specification `/foo/:bar/:baz?`
+/// Route           | Matches | Route Map Entries
+/// --------------- | ------- | -----------------
+/// `/foo`          | No      |
+/// `/foo/bar`      | Yes     | `{":bar": "bar", ":baz?": ""}`
+/// `/foo/bar/baz`  | Yes     | `{":bar": "bar", ":baz?": "baz"}`
+/// `/foo/bar/qux`  | Yes     | `{":bar": "bar", ":baz?": "quz"}`
+/// `/foo/baz`      | Yes     | `{":bar": "baz"}`
+///
+pub struct StandardResolver
 {
-    resolvers: Vec<(Box<Resolver>, Box<RequestHandler>)>,
+    /// The routing specification
+    route: Vec<RouteSpec>
 }
 
+/// A more user-friendly interface to build a [Router] from.
+///
+/// By default, this will use the [StandardResolver] for paths, but this can
+/// be changed.
 pub struct RouterBuilder
 {
     /// The constructor used to create new resolvers.
     constructor: Box<ResolverConstructor>,
 
+    /// The list of resolvers which have been bound to actions.
     resolvers: Vec<(Box<Resolver>, Box<RequestHandler>)>,
 }
 
+/// The router which the server will use while running to handle requests.
+/// This is a finalized version of the [RouterBuilder] which is completely
+/// thread-safe. However, once the router has been constructed, the resolvers
+/// are static and cannot change.
+pub struct Router
+{
+    /// The list of resolvers which could possible handle a request and the
+    /// handlers associated with them.
+    resolvers: Vec<(Box<Resolver>, Box<RequestHandler>)>,
+}
+
+/// Describes the parts of a route specification in a [StandardResolver].
+enum RouteSpec
+{
+    Literal(String),
+    Variable(String),
+    Optional(String),
+}
+
+//
+// Implementation
+//
+
 impl RouterBuilder
 {
+    /// Builds a new router builder, which can be used in places like a
+    /// [ServerBuilder] to construct the [Resolver]s which will be used
+    /// to handle a request.
     pub fn new() -> RouterBuilder
     {
         RouterBuilder {
@@ -116,23 +199,10 @@ impl Router
     }
 }
 
-/// A resolver which follows the standard resolving method
-/// described by [StandardRouter].
-pub struct StandardResolver
-{
-    /// The routing specification
-    route: Vec<RouteTypes>
-}
-
-enum RouteTypes
-{
-    Literal(String),
-    Variable(String),
-    Optional(String),
-}
-
 impl StandardResolver
 {
+    /// Constructs a new [StandardResolver] by using the given `route`
+    /// specification.
     fn new(route: Vec<String>) -> Box<Resolver>
     {
         // build a vector of route types now, so we don't have to do
@@ -141,14 +211,14 @@ impl StandardResolver
         for spec in route {
             if spec.starts_with(":") {
                 if spec.ends_with("?") {
-                    specs.push(RouteTypes::Optional(spec));
+                    specs.push(RouteSpec::Optional(spec));
                 }
                 else {
-                    specs.push(RouteTypes::Variable(spec));
+                    specs.push(RouteSpec::Variable(spec));
                 }
             }
             else {
-                specs.push(RouteTypes::Literal(spec));
+                specs.push(RouteSpec::Literal(spec));
             }
         }
 
@@ -171,7 +241,7 @@ impl Resolver for StandardResolver
 
             match expected {
                 // if a literal doesn't match, then the path is wrong
-                &RouteTypes::Literal(ref expected) => {
+                &RouteSpec::Literal(ref expected) => {
 
                     // we require there to be something in the actual route
                     let actual = actual?;
@@ -184,7 +254,7 @@ impl Resolver for StandardResolver
                 },
 
                 // variables have to match
-                &RouteTypes::Variable(ref name) => {
+                &RouteSpec::Variable(ref name) => {
                     // we need something here, it's not optional
                     let actual = actual?.to_string();
                     let name = name.to_string();
@@ -199,7 +269,7 @@ impl Resolver for StandardResolver
                     j += 1;
                 },
 
-                &RouteTypes::Optional(ref name) => {
+                &RouteSpec::Optional(ref name) => {
                     let text: String = match actual {
                         None => "".into(),
                         Some(x) => x.to_string(),
@@ -217,8 +287,14 @@ impl Resolver for StandardResolver
             i += 1;
         }
 
-        // we'll accept this route with the related variables' values
-        Some(map)
+        // if we still have actual tokens left, then we can't have possibly
+        // matched the route
+        if j < route.len() {
+            None
+        }
+        else {
+            Some(map)
+        }
     }
 }
 
@@ -227,61 +303,144 @@ mod test
 {
     use routing::*;
 
-    #[test]
-    fn standard_matches_root()
-    {
-        let router = StandardRouter::new();
-        let resolver = router.resolver("".to_owned());
-        assert!(resolver.resolve(&vec![]).is_some());
-        assert!(resolver.resolve(&vec!["test"]).is_none());
-        assert!(resolver.resolve(&vec!["test", "2"]).is_none());
+    macro_rules! resolver {
+        ( $( $x:expr ),* ) => {{
+            let mut route = Vec::new();
+            $(
+                route.push($x.to_owned());
+            )*
+            StandardResolver::new(route)
+        }}
+    }
+
+    macro_rules! resolve {
+        ( $r:ident, $( $x:expr ),* ) => {{
+            let mut test = Vec::new();
+            $(
+                test.push($x);
+            )*
+            $r.resolve(&test)
+        }}
     }
 
     #[test]
     fn standard_matches_literals()
     {
-        let router = StandardRouter::new();
-        let resolver = router.resolver("test".to_owned());
-        assert!(resolver.resolve(&vec![]).is_none());
-        assert!(resolver.resolve(&vec!["test"]).is_some());
-        assert!(resolver.resolve(&vec!["test", "2"]).is_none());
-    }
+        // Resolver: /
+        let resolver = resolver![""];
+        match resolve!(resolver, "") {
+            None => panic!("/ didn't match /"),
+            Some(map) => assert_eq!(0, map.len())
+        }
 
-    #[test]
-    fn standard_matches_rvars()
-    {
-        let router = StandardRouter::new();
-        let resolver = router.resolver(":test".to_owned());
-        assert!(resolver.resolve(&vec![]).is_none());
-        assert!(resolver.resolve(&vec!["test", "2"]).is_none());
+        match resolve!(resolver, "foo") {
+            Some(_) => panic!("/ matched /foo"),
+            None => {}
+        }
 
-        match resolver.resolve(&vec!["aaa"]) {
-            None => assert!(false),
-            Some(args) => {
-                assert_eq!(1, args.len());
-                assert_eq!(Some(&"aaa".to_owned()), args.get(":test"));
-            }
+        match resolve!(resolver, "foo", "bar") {
+            Some(_) => panic!("/ matched /foo/bar"),
+            None => {}
+        }
+
+        // Resolver: /foo
+        let resolver = resolver!["foo"];
+        match resolve!(resolver, "") {
+            Some(_) => panic!("/foo matched /"),
+            None => {}
+        }
+
+        match resolve!(resolver, "foo") {
+            None => panic!("/foo didn't match /foo"),
+            Some(map) => assert_eq!(0, map.len())
+        }
+
+        match resolve!(resolver, "foo", "bar") {
+            Some(_) => panic!("/foo matched /foo/bar"),
+            None => {}
+        }
+
+        // Resolver: /foo/bar
+        let resolver = resolver!["foo", "bar"];
+        match resolve!(resolver, "") {
+            Some(_) => panic!("/foo/bar matched /"),
+            None => {},
+        }
+
+        match resolve!(resolver, "foo") {
+            Some(_) => panic!("/foo/bar matched /foo"),
+            None => {},
+        }
+
+        match resolve!(resolver, "foo", "bar") {
+            None => panic!("/foo/bar didn't match /foo/bar"),
+            Some(map) => assert_eq!(0, map.len())
         }
     }
 
     #[test]
-    fn standard_matches_all()
+    fn standard_matches_vars()
     {
-        let router = StandardRouter::new();
-        let resolver = router.resolver("user/:name/:action".to_owned());
+        // Resolver: /:foo/:bar
+        let resolver = resolver![":foo", ":bar"];
 
-        assert!(resolver.resolve(&vec![]).is_none());
-        assert!(resolver.resolve(
-                &vec!["files", "bad", "badstuff.zip"]
-        ).is_none());
+        match resolve!(resolver, "") {
+            Some(_) => panic!("/:foo/:bar matched /"),
+            None => {}
+        }
 
-        match resolver.resolve(&vec!["user", "austin", "edit"]) {
-            None => assert!(false),
-            Some(args) => {
-                assert_eq!(2, args.len());
-                assert_eq!("austin", args[":name"]);
-                assert_eq!("edit", args[":action"]);
+        match resolve!(resolver, "foo") {
+            Some(_) => panic!("/:foo/:bar matched /foo"),
+            None => {}
+        }
+
+        match resolve!(resolver, "foo", "bar") {
+            None => panic!("/:foo/:bar didn't match /foo/bar"),
+            Some(map) => {
+                assert_eq!(Some("foo"), map.get(":foo").map(String::as_str));
+                assert_eq!(Some("bar"), map.get(":bar").map(String::as_str));
             }
+        }
+
+        match resolve!(resolver, "foo", "bar", "baz") {
+            Some(_) => panic!("/:foo/:bar matched /foo/bar/baz"),
+            None => {}
+        }
+    }
+
+    #[test]
+    fn standard_matches_optionals()
+    {
+        // Resolver: /:foo?/:bar?
+        let resolver = resolver![":foo?", ":bar?"];
+
+        match resolve!(resolver, "") {
+            None => panic!("/:foo?/:bar? didn't match /"),
+            Some(map) => {
+                assert_eq!(Some(""), map.get(":foo?").map(String::as_str));
+                assert_eq!(Some(""), map.get(":bar?").map(String::as_str));
+            }
+        }
+
+        match resolve!(resolver, "foo") {
+            None => panic!("/:foo?/:bar? didn't match /foo"),
+            Some(map) => {
+                assert_eq!(Some("foo"), map.get(":foo?").map(String::as_str));
+                assert_eq!(Some(""), map.get(":bar?").map(String::as_str));
+            }
+        }
+
+        match resolve!(resolver, "foo", "bar") {
+            None => panic!("/:foo?/:bar? didn't match /foo/bar"),
+            Some(map) => {
+                assert_eq!(Some("foo"), map.get(":foo?").map(String::as_str));
+                assert_eq!(Some("bar"), map.get(":bar?").map(String::as_str));
+            }
+        }
+
+        match resolve!(resolver, "foo", "bar", "baz") {
+            Some(_) => panic!("/:foo?/:bar? matched /foo/bar/baz"),
+            None => {}
         }
     }
 }
