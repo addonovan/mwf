@@ -60,7 +60,7 @@ impl RequestHandler for UserPortal
             },
 
             "change_id" => {
-                match arg.and_then(|it| it.parse::<u32>()) {
+                match arg.and_then(|it| it.parse::<u32>().ok()) {
                     None => {
                         "Dude, that's not a number".into()
                     },
