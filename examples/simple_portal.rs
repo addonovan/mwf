@@ -43,6 +43,7 @@ impl RequestHandler for UserPortal
         // grab the deets from the URL
         let id: u32 = route_map[":id"].parse().unwrap();
         let action = route_map[":action"].as_str();
+        let arg = route_map.get(":arg?");
 
         let mut users = self.users.lock().unwrap();
 
@@ -59,15 +60,29 @@ impl RequestHandler for UserPortal
             },
 
             "change_id" => {
-                let id: u32 = route_map[":arg?"].parse().unwrap();
-                user.id = id;
-                "Success!".into()
+                match arg.and_then(|it| it.parse::<u32>()) {
+                    None => {
+                        "Dude, that's not a number".into()
+                    },
+
+                    Some(id) => {
+                        user.id = id;
+                        "Success!".into()
+                    }
+                }
             },
 
             "change_name" => {
-                let name = route_map[":arg?"].clone();
-                user.name = name;
-                "Success!".into()
+                match arg {
+                    None => {
+                        "No name given".into()
+                    },
+
+                    Some(name) => {
+                        user.name = name.clone();
+                        "Success!".into()
+                    }
+                }
             }
 
             _ => {
