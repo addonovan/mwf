@@ -44,10 +44,10 @@ impl RequestHandler for UserPortal
         let id: u32 = route_map[":id"].parse().unwrap();
         let action = route_map[":action"].as_str();
 
-        let users = self.users.lock().unwrap();
+        let mut users = self.users.lock().unwrap();
 
         // grab the user specified by the id
-        let user = match users.iter().find(|it| it.id == id) {
+        let user = match users.iter_mut().find(|it| it.id == id) {
             None => return Err(Box::new(NoSuchUserError::new())),
             Some(x) => x,
         };
@@ -57,6 +57,18 @@ impl RequestHandler for UserPortal
             "greet" => {
                 format!("Hello, {}!", user.name)
             },
+
+            "change_id" => {
+                let id: u32 = route_map[":arg?"].parse().unwrap();
+                user.id = id;
+                "Success!".into()
+            },
+
+            "change_name" => {
+                let name = route_map[":arg?"].clone();
+                user.name = name;
+                "Success!".into()
+            }
 
             _ => {
                 "Unknown action :(".into()
@@ -81,7 +93,7 @@ fn main()
     let portal = UserPortal::new(users);
 
     ServerBuilder::new()
-        .bind("/user/:id/:action", portal)
+        .bind("/user/:id/:action/:arg?", portal)
         .start()
         .unwrap();
 }

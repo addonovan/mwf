@@ -121,15 +121,39 @@ impl Router
 pub struct StandardResolver
 {
     /// The routing specification
-    route: Vec<String>
+    route: Vec<RouteTypes>
+}
+
+enum RouteTypes
+{
+    Literal(String),
+    Variable(String),
+    Optional(String),
 }
 
 impl StandardResolver
 {
     fn new(route: Vec<String>) -> Box<Resolver>
     {
+        // build a vector of route types now, so we don't have to do
+        // any difficult processing later :^)
+        let mut specs = Vec::new();
+        for spec in route {
+            if spec.starts_with(":") {
+                if spec.ends_with("?") {
+                    specs.push(RouteTypes::Optional(spec));
+                }
+                else {
+                    specs.push(RouteTypes::Variable(spec));
+                }
+            }
+            else {
+                specs.push(RouteTypes::Literal(spec));
+            }
+        }
+
         Box::new(StandardResolver {
-            route
+            route: specs
         })
     }
 }
@@ -138,31 +162,59 @@ impl Resolver for StandardResolver
 {
     fn resolve(&self, route: &Vec<&str>) -> Option<RouteMap>
     {
-        // if the number of parts to the route isn't correct, then we
-        // should reject it
-        if self.route.len() != route.len() {
-            return None;
-        }
-
         let mut map = RouteMap::new();
-        for i in 0..route.len() {
-            let expected = self.route[i].clone();
-            let actual = route[i];
+        let mut i = 0;
+        let mut j = 0;
 
-            // if this is a routing variable, then we'll always accept it
-            if expected.starts_with(":") {
-                if let Some(_) = map.insert(expected, actual.to_string()) {
-                    panic!(
-                        "Multiple routing variables with name {}",
-                        self.route[i].clone()
-                    );
-                };
+        while let Some(expected) = self.route.get(i) {
+            let actual = route.get(j);
+
+            match expected {
+                // if a literal doesn't match, then the path is wrong
+                &RouteTypes::Literal(ref expected) => {
+
+                    // we require there to be something in the actual route
+                    let actual = actual?;
+                    if actual != &expected.as_str() {
+                        return None;
+                    }
+
+                    // and we need to move to the next part of the given route
+                    j += 1;
+                },
+
+                // variables have to match
+                &RouteTypes::Variable(ref name) => {
+                    // we need something here, it's not optional
+                    let actual = actual?.to_string();
+                    let name = name.to_string();
+
+                    // if there was already an item with a name there, we'll
+                    // have to panic
+                    if let Some(_) = map.insert(name, actual) {
+                        panic!("Multiple variables with same name!");
+                    }
+
+                    // move onto the next route token
+                    j += 1;
+                },
+
+                &RouteTypes::Optional(ref name) => {
+                    let text: String = match actual {
+                        None => "".into(),
+                        Some(x) => x.to_string(),
+                    };
+                    let name = name.to_string();
+
+                    if let Some(_) = map.insert(name, text) {
+                        panic!("Multiple variables with the same name!");
+                    }
+
+                    j += 1;
+                },
             }
-            // otherwise, if the routing path literal didn't match, then we can
-            // immediately reject
-            else if *actual != *expected {
-                return None;
-            }
+
+            i += 1;
         }
 
         // we'll accept this route with the related variables' values
