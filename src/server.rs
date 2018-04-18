@@ -38,10 +38,22 @@ impl ServerBuilder
         }
     }
 
-    pub fn bind<T: Into<String>, H: 'static>(mut self, path: T, handler: H) -> Self
+    pub fn resolver<T: 'static>(mut self, resolver: T) -> Self
+        where T: Fn(Vec<String>) -> Box<Resolver>
+    {
+        self.router.constructor(Box::new(resolver));
+        self
+    }
+
+    /// Binds the request `handler` to a given `route` on the server.
+    pub fn bind<T: Into<String>, H: 'static>(
+        mut self,
+        route: T,
+        handler: H
+    ) -> Self
         where H: RequestHandler
     {
-        self.router.bind(path, handler);
+        self.router.bind(route, handler);
         self
     }
 

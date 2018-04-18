@@ -125,6 +125,11 @@ impl RouterBuilder
         }
     }
 
+    pub fn constructor(&mut self, resolver: Box<ResolverConstructor>)
+    {
+        self.constructor = resolver;
+    }
+
     /// Binds a URL route to an action in the receiver object.
     pub fn bind<T: Into<String>, H: 'static>(&mut self, path: T, handler: H)
         where H: RequestHandler
