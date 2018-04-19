@@ -50,11 +50,20 @@ impl RequestHandler for FileBrowser
                 let entry = entry.to_owned();
                 let entry = entry.into_string().unwrap();
 
-                let link = format!(
-                    "<a href=\"/{0:}/{1:}\">{1:}",
-                    file_path,
-                    entry
-                );
+                let link: String;
+                if file_path.is_empty() {
+                    link = format!(
+                        "<a href=\"/{0:}\"> {0:} </a>",
+                        entry
+                    );
+                }
+                else {
+                    link = format!(
+                        "<a href=\"/{0:}/{1:}\"> {1:} </a>",
+                        file_path,
+                        entry
+                    );
+                }
 
                 contents.push(link);
             }
