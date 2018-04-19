@@ -3,6 +3,12 @@ name = "mwf"
 version = "0.1.0"
 authors = ["addonovan <austin@addonovan.com>"]
 
+[dependencies]
+iron = "0.6"
+pulldown-cmark = { version = "0.0.11", deafult-features = false }
+
+
+
 [[example]]
 name = "hello_world"
 
@@ -15,6 +21,5 @@ name = "simple_portal"
 [[example]]
 name = "markdown"
 
-[dependencies]
-iron = "0.6"
-pulldown-cmark = { version = "0.0.11", deafult-features = false }
+[[example]]
+name = "decorator"

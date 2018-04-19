@@ -15,9 +15,26 @@ pub type ViewResult = Result<View, Box<Error>>;
 /// which evaluates to a string.
 pub struct View
 {
+    /// the content of this view
     content: String,
+
+    /// the mime type for the file (will be inserted into the response header).
     mime: Mime,
 }
+
+/// Decorates a view with something that the view doesn't already have.
+pub trait ViewDecorator
+{
+    /// Decorates the given `view`.
+    ///
+    /// This should be called by using an `and_then` chain from
+    /// the [ViewResult].
+    fn decorate(&self, view: View) -> ViewResult;
+}
+
+//
+// Implementation
+//
 
 impl View
 {
@@ -66,6 +83,7 @@ impl View
             // convert the extension to lowercase, that way we can be case
             // insensitive when checking if it's an html file.
             let ext = ext.to_str().unwrap().to_ascii_lowercase();
+
             if ext == "html" || ext == "htm" {
                 view.mime("text/html".parse().unwrap());
             }
@@ -75,10 +93,11 @@ impl View
 
                 let original = view.content.clone();
                 let mut md = String::new();
+
                 let p = Parser::new(&original);
                 html::push_html(&mut md, p);
-                view.content = md;
 
+                view.content = md;
                 view.mime("text/html".parse().unwrap());
             }
         }
