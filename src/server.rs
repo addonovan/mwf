@@ -1,10 +1,8 @@
 extern crate iron;
 
 use std::sync::{Arc, RwLock};
-use std::collections::HashMap;
 
-use super::routing::*;
-use super::view::*;
+use routing::*;
 
 use iron::*;
 use iron::error::HttpResult;
@@ -12,8 +10,7 @@ use iron::status;
 use iron::Request;
 use iron::headers::ContentType;
 
-///Generates a page based on the routing information in the [RouteMap]
-pub type PageHandler = Box<Fn(RouteMap) -> ViewResult + Send + Sync>;
+use handle::RequestHandler;
 
 //
 // The framework builder
@@ -22,9 +19,7 @@ pub type PageHandler = Box<Fn(RouteMap) -> ViewResult + Send + Sync>;
 /// A builder-pattern for constructing a new [Server].
 pub struct ServerBuilder
 {
-    pages: HashMap<String, PageHandler>,
-    page_not_found: PageHandler,
-    router: Box<Router>,
+    router: RouterBuilder,
     address: String,
 }
 
@@ -37,52 +32,30 @@ impl ServerBuilder
     /// * Bound to `localhost:8080`
     pub fn new() -> Self
     {
-        let page_not_found = |_| {
-            View::from("Page Not Found")
-        };
-        let page_not_found = Box::new(page_not_found);
-
         ServerBuilder {
-            pages: HashMap::new(),
-            page_not_found,
-            router: Box::new(StandardRouter::new()),
+            router: RouterBuilder::new(),
             address: "localhost:8080".to_owned(),
         }
     }
 
-    /// Changes the [Router] instance to use to generate
-    /// [RouteResolvers] once the web server is started.
-    pub fn router<T: 'static + Router>(mut self, router: T) -> Self
+    /// Assigns a new `resolver` to be used in place of the current one. The
+    /// function must be a constructor which creates [Box]es of [Resolver]s.
+    pub fn resolver<T: 'static>(mut self, resolver: T) -> Self
+        where T: Fn(Vec<String>) -> Box<Resolver>
     {
-        self.router = Box::new(router);
+        self.router.constructor(Box::new(resolver));
         self
     }
 
-    /// Binds a `handler` to the given route specification, `path`.
-    pub fn on_page<F: 'static + Send + Sync>(
+    /// Binds the request `handler` to a given `route` on the server.
+    pub fn bind<T: Into<String>, H: 'static>(
         mut self,
-        path: &str,
-        handler: F
+        route: T,
+        handler: H
     ) -> Self
-        where F: Fn(RouteMap) -> ViewResult
+        where H: RequestHandler
     {
-        // clean up the path first
-        // remove leading and trailing slashes (as they aren't necessary)
-        let path = path.trim_left_matches("/")
-            .trim_right_matches("/");
-
-        self.pages.insert(path.to_owned(), Box::new(handler));
-        self
-    }
-
-    /// Binds a `handler` to the 404 page.
-    pub fn on_page_not_found<F: 'static + Send + Sync>(
-        mut self,
-        handler: F
-    ) -> Self
-        where F: Fn(RouteMap) -> ViewResult
-    {
-        self.page_not_found = Box::new(handler);
+        self.router.bind(route, handler);
         self
     }
 
@@ -99,9 +72,7 @@ impl ServerBuilder
     pub fn start(self) -> HttpResult<Listening>
     {
         let framework = Server::new(
-            self.router,
-            self.pages,
-            self.page_not_found
+            self.router.into(),
         );
         let framework = RwLock::new(framework);
         let framework = Arc::new(framework);
@@ -123,92 +94,42 @@ impl ServerBuilder
 /// An instance of a running webserver.
 struct Server
 {
-    pages: Vec<(Box<RouteResolver>, PageHandler)>,
-    page_not_found: PageHandler,
+    router: Router,
 }
 
 impl Server
 {
-    /// Creates a new server, which uses `router` to generate `RouteResolvers`
-    /// for the given `pages` (which is done before the server is started),
-    /// and which will serve `page_not_found` as its 404 page.
-    fn new(
-        router: Box<Router>,
-        pages: HashMap<String, PageHandler>,
-        page_not_found: PageHandler,
-    ) -> Self
+    fn new(router: Router) -> Self
     {
-        // creates RouteResolvers for all of the route specifications
-        let pages = pages.into_iter()
-            .map(|(s, h)| {
-                (router.resolver(s), h)
-            })
-            .collect();
-
         Server {
-            pages,
-            page_not_found,
+            router
         }
     }
 
     /// Handles an incoming `request`.
     fn handle(&self, request: &mut Request) -> IronResult<Response>
     {
-        let route = request.url.path()
-            .iter()
-            .filter_map(|it| {
-                if it.is_empty() {
-                    None
-                }
-                else {
-                    Some(*it)
-                }
-            })
-            .collect();
+        let result = match self.router.handle(request) {
+            Some(x) => x,
 
-        for &(ref resolver, ref handler) in &self.pages {
-            // see if this resolver successfully matches the given route
-            let data = match resolver.resolve(&route) {
-                None => continue,
-                Some(x) => x,
-            };
-
-            // safely get the View from the handler
-            return match handler(data) {
-                Ok(view) => {
-                    let (content, mime) = view.into();
-
-                    let mut response = Response::with((status::Ok, content));
-                    response.headers.set(ContentType(mime));
-
-                    Ok(response)
-                },
-
-                Err(reason) => {
-                    let reason: String = reason.to_string();
-                    Ok(Response::with((status::InternalServerError, reason)))
-                }
+            // page not found :(
+            None => {
+                return Ok(Response::with((status::NotFound, "Oh no :(")));
             }
-        }
+        };
 
-        // couldn't find a page that would accept it
-        let mut map = HashMap::new();
-        map.insert( "path".to_owned(), route.join("/").to_owned() );
-
-        // default to the 404 page
-        let handler = &self.page_not_found;
-        match handler(map) {
+        match result {
             Ok(view) => {
                 let (content, mime) = view.into();
 
-                let mut response = Response::with((status::NotFound, content));
+                let mut response = Response::with((status::Ok, content));
                 response.headers.set(ContentType(mime));
 
                 Ok(response)
             },
 
             Err(reason) => {
-                let reason: String = reason.to_string();
+                let reason = reason.to_string();
                 Ok(Response::with((status::InternalServerError, reason)))
             }
         }
