@@ -6,7 +6,7 @@ General
 
 *M*y *W*eb *F*ramework. (Great name, I know)
 
-This project was inspired by Gary Berndhart's screencast on 
+This project was inspired by Gary Bernhardt's screencast on 
 [Destroy All Software](https://www.destroyallsoftware.com/) about making a
 webframework from scratch.
 
