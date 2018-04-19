@@ -1,4 +1,5 @@
 extern crate iron;
+extern crate pulldown_cmark;
 
 // Export as mwf::*
 mod server;
