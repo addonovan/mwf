@@ -7,15 +7,34 @@ use std::error::Error;
 
 use iron::mime::Mime;
 
+use pulldown_cmark::{Parser, html};
+
 pub type ViewResult = Result<View, Box<Error>>;
 
 /// A view for the website. This is simply something
 /// which evaluates to a string.
 pub struct View
 {
+    /// the content of this view
     content: String,
+
+    /// the mime type for the file (will be inserted into the response header).
     mime: Mime,
 }
+
+/// Decorates a view with something that the view doesn't already have.
+pub trait ViewDecorator
+{
+    /// Decorates the given `view`.
+    ///
+    /// This should be called by using an `and_then` chain from
+    /// the [ViewResult].
+    fn decorate(&self, view: View) -> ViewResult;
+}
+
+//
+// Implementation
+//
 
 impl View
 {
@@ -43,7 +62,7 @@ impl View
 impl View
 {
     /// Attempts to read the file described by the given `path`.
-    pub fn path<T: Into<PathBuf>>(path: T) -> ViewResult
+    pub fn file<T: Into<PathBuf>>(path: T) -> ViewResult
     {
         let path = path.into();
         let path = path.as_path();
@@ -64,7 +83,21 @@ impl View
             // convert the extension to lowercase, that way we can be case
             // insensitive when checking if it's an html file.
             let ext = ext.to_str().unwrap().to_ascii_lowercase();
+
             if ext == "html" || ext == "htm" {
+                view.mime("text/html".parse().unwrap());
+            }
+            // if it's markdown, then we're going to pass it through the
+            // markdown-to-html converter, then display the html file
+            else if ext == "md" {
+
+                let original = view.content.clone();
+                let mut md = String::new();
+
+                let p = Parser::new(&original);
+                html::push_html(&mut md, p);
+
+                view.content = md;
                 view.mime("text/html".parse().unwrap());
             }
         }
@@ -120,7 +153,7 @@ mod test
         let expected = include_str!("view.rs");
         let expected = expected.to_owned();
 
-        let view = View::path(path).unwrap();
+        let view = View::file(path).unwrap();
         let (content, mime) = view.into();
         assert_eq!(expected, content);
 
@@ -132,7 +165,7 @@ mod test
             }
         }
 
-        assert!(View::path("src/rs.view").is_err());
+        assert!(View::file("src/rs.view").is_err());
     }
 
     #[test]

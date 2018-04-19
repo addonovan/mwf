@@ -28,7 +28,7 @@ impl RequestHandler for FileBrowser
 
         // if it's a file, we'll display the contents of the file
         if file.is_file() {
-            View::path(file_path)
+            View::file(file_path)
         }
         // if it's a directory, we'll list its contents
         else if file.is_dir() {
