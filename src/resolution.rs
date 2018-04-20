@@ -194,3 +194,179 @@ impl Resolver for StandardResolver
     }
 }
 
+#[cfg(test)]
+mod test
+{
+    use super::*;
+
+    /// Creates a resolver that matches the given `method` and with the given
+    /// path specs, `x`.
+    macro_rules! resolver {
+        ( $method:expr, $( $x:expr ),* ) => {{
+            let mut route = Vec::new();
+            $(
+                route.push($x.to_owned());
+            )*
+            StandardResolver::new($method, route)
+        }}
+    }
+
+    /// Tries to resolve the given path, `x`, using the resolver, `r`, and
+    /// request `method`.
+    macro_rules! resolve {
+        ( $r:ident, $method:expr, $( $x:expr ),* ) => {{
+            let mut test = Vec::new();
+            $(
+                test.push($x);
+            )*
+            let params = ResolveParams {
+                method: $method,
+                route: test,
+            };
+            $r.resolve(&params)
+        }}
+    }
+
+    /// Tests if the root directory is matched via both GET and POST requests.
+    #[test]
+    fn standard_matches_root()
+    {
+        let resolver = resolver!(Method::Get, "");
+        let map = resolve!(resolver, Method::Get, "")
+            .expect("GET/ did not match GET/");
+        assert_eq!(0, map.len());
+
+        let resolver = resolver!(Method::Post, "");
+        let map = resolve!(resolver, Method::Post, "")
+            .expect("POST/ did not match POST/");
+        assert_eq!(0, map.len());
+    }
+
+    /// Tests if the standard will reject routes based solely on the request
+    /// method.
+    #[test]
+    fn standard_reject_wrong_method()
+    {
+        let resolver = resolver!(Method::Get, "");
+        let map = resolve!(resolver, Method::Post, "");
+        assert!(map.is_none());
+    }
+
+    /// Tests if the standard will match a series of path literals
+    #[test]
+    fn standard_matches_literals()
+    {
+        let resolver = resolver!(Method::Get, "foo", "bar", "baz");
+        let map = resolve!(resolver, Method::Get, "foo", "bar", "baz")
+            .expect("GET/foo/bar/baz did not match GET/foo/bar/baz");
+        assert_eq!(0, map.len());
+    }
+
+    /// Tests if the standard will match a series of incorrect path literals.
+    #[test]
+    fn standard_rejects_wrong_literals()
+    {
+        let resolver = resolver!(Method::Get, "foo", "bar", "baz");
+        let map = resolve!(resolver, Method::Get, "foo", "bar", "qux");
+        assert!(map.is_none(), "GET/foo/bar/qux matched GET/foo/bar/baz");
+    }
+
+    /// Tests if the standard will match route variables and insert the text
+    /// into the routemap.
+    #[test]
+    fn standard_matches_variable()
+    {
+        let resolver = resolver!(Method::Get, ":foo");
+        let map = resolve!(resolver, Method::Get, "bar")
+            .expect("GET/bar did not match GET/:foo");
+        assert_eq!(1, map.len());
+        assert_eq!(Some(&"bar".into()), map.get(":foo"));
+    }
+
+    /// Tests if the standard will match multiple route variables.
+    #[test]
+    fn standard_matches_multiple_variables()
+    {
+        let resolver = resolver!(Method::Get, ":foo", ":bar");
+        let map = resolve!(resolver, Method::Get, "baz", "qux")
+            .expect("GET/baz/qux did not match GET/:foo/:bar");
+        assert_eq!(2, map.len());
+        assert_eq!(Some(&"baz".into()), map.get(":foo"));
+        assert_eq!(Some(&"qux".into()), map.get(":bar"));
+    }
+
+    /// Tests if the standard will reject if one of the variables is missing
+    #[test]
+    fn standard_rejects_missing_variables()
+    {
+        let resolver = resolver!(Method::Get, ":foo", ":bar");
+        let map = resolve!(resolver, Method::Get, "baz");
+        assert!(map.is_none(), "GET/baz matched GET/:foo/:bar");
+    }
+
+    /// Tests if the standard will match a missing optional variable and
+    /// insert an empty string in its place in the routemap.
+    #[test]
+    fn standard_matches_missing_optional()
+    {
+        let resolver = resolver!(Method::Get, ":foo?");
+        let map = resolve!(resolver, Method::Get, "")
+            .expect("GET/ did not match GET/:foo?");
+        assert_eq!(1, map.len());
+        assert_eq!(Some(&"".into()), map.get(":foo?"));
+    }
+
+    /// Tests if the standard will match against a present optional variable
+    /// and insert the value in its place in the routemap.
+    #[test]
+    fn standard_matches_present_optional()
+    {
+        let resolver = resolver!(Method::Get, ":foo?");
+        let map = resolve!(resolver, Method::Get, "bar")
+            .expect("GET/bar did not match GET/:foo?");
+        assert_eq!(1, map.len());
+        assert_eq!(Some(&"bar".into()), map.get(":foo?"));
+    }
+
+    /// Tests if the standard will correctly match a mix of literals, variables,
+    /// and optional variables.
+    #[test]
+    fn standard_matches_mixed()
+    {
+        let resolver = resolver!(Method::Get, "foo", ":bar", ":baz?");
+        let map = resolve!(resolver, Method::Get, "foo", "qux", "quux" )
+            .expect("GET/foo/qux/quux did not match GET/foo/:bar/:baz?");
+        assert_eq!(2, map.len());
+        assert_eq!(Some(&"qux".into()), map.get(":bar"));
+        assert_eq!(Some(&"quux".into()), map.get(":baz?"));
+
+        let map = resolve!(resolver, Method::Get, "foo", "qux")
+            .expect("GET/foo/qux did not match GET/foo/:bar/:baz?");
+        assert_eq!(2, map.len());
+        assert_eq!(Some(&"qux".into()), map.get(":bar"));
+        assert_eq!(Some(&"".into()), map.get(":baz?"));
+    }
+
+    /// Tests if the standard will correctly reject routes which do not match
+    /// the mixed specification.
+    #[test]
+    fn standard_rejects_mixed()
+    {
+        let resolver = resolver!(Method::Get, "foo", ":bar", ":baz?");
+        let map = resolve!(resolver, Method::Get, "foo");
+        assert!(map.is_none(), "GET/foo matched GET/foo/:bar/:baz?");
+
+        let map = resolve!(resolver, Method::Get, "corge", "quux", "quuz");
+        assert!(
+            map.is_none(),
+            "GET/corge/quux/quuz matched GET/foo/:bar/:baz?"
+        );
+
+        let map = resolve!(resolver, Method::Post, "qux", "quux", "quuz");
+        assert!(
+            map.is_none(),
+            "POST/qux/quux/quuz matched GET/foo/:bar/:baz?"
+        );
+    }
+
+}
