@@ -50,8 +50,8 @@ impl Surround
             .map(String::from)
             .collect();
 
-        let pre = vec.pop().unwrap_or("".into());
         let post = vec.pop().unwrap_or("".into());
+        let pre = vec.pop().unwrap_or("".into());
 
         Surround {
             pre,
