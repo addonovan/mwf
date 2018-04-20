@@ -134,22 +134,71 @@ mod test
 {
     use super::*;
 
+    /// Test if the [Surround::new] API accepts two `&'static str`s as
+    /// parameters and makes a view correctly from them.
     #[test]
-    fn surround()
+    fn surround_new_strs()
     {
         let dec = Surround::new("foo", "baz");
         let view = View::raw("bar").apply(&dec);
         assert_eq!("foobarbaz", view.content);
+    }
 
-        let dec = Surround::from("foo{{middle}}baz");
+    /// Test if the [Surround::new] API accepts two `String`s as parameters.
+    #[test]
+    fn surround_new_strings()
+    {
+        let dec = Surround::new("foo".to_string(), "baz".to_string());
+        let view = View::raw("bar").apply(&dec);
+        assert_eq!("foobarbaz", view.content);
+    }
+
+    /// Test if the [Surround::new] API can mix and match between
+    /// `&'static str`s and `String`s
+    #[test]
+    fn surround_new_mixed()
+    {
+        let dec = Surround::new("foo".to_string(), "baz");
         let view = View::raw("bar").apply(&dec);
         assert_eq!("foobarbaz", view.content);
 
+        let dec = Surround::new("foo", "baz".to_string());
+        let view = View::raw("bar").apply(&dec);
+        assert_eq!("foobarbaz", view.content);
+    }
+
+    /// Tests the [Surround::from] API's ability to split on the `{{middle}}`
+    /// delimiter and still applies to a view correctly.
+    #[test]
+    fn surround_from_with_delimiter()
+    {
+        let dec = Surround::from("foo{{middle}}baz");
+        let view = View::raw("bar").apply(&dec);
+        assert_eq!("foobarbaz", view.content);
+    }
+
+    /// Tests the [Surround::from] API's ability to handle the case when there
+    /// is no delimiter in the given string.
+    #[test]
+    fn surround_from_without_delimiter()
+    {
         let dec = Surround::from("barbaz");
         let view = View::raw("foo").apply(&dec);
         assert_eq!("foobarbaz", view.content);
     }
 
+    /// Tests the [Surround::from] API's ability to handle the case when there
+    /// are multiple delimiters in the given string.
+    #[test]
+    fn surround_from_with_multiple_delimiters()
+    {
+        let dec = Surround::from("foo{{middle}}baz{{middle}}quz");
+        let view = View::raw("bar").apply(&dec);
+        assert_eq!("foobarbaz", view.content);
+    }
+
+    /// Tests the [Markdown] decorator's ability to correctly convert markdown
+    /// source into html, and also change the mime type to `text/html`.
     #[test]
     fn markdown()
     {
@@ -160,8 +209,10 @@ mod test
         assert_eq!("html", view.mime.subtype());
     }
 
+    /// Tests the ability to chain [View::apply] functions together and have
+    /// each [Decorator] work together.
     #[test]
-    fn chaining()
+    fn apply_chaining()
     {
         let surround = Surround::new("*foo", "baz*");
         let md = Markdown;
