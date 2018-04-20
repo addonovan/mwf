@@ -12,4 +12,4 @@ pulldown-cmark = { version = "0.0.11", deafult-features = false }
 name = "hello_world"
 
 [[example]]
-name = "decorator"
+name = "decorators"

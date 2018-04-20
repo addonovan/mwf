@@ -8,6 +8,8 @@ pub use self::error::*;
 mod view;
 pub use self::view::*;
 
+pub mod decorator;
+
 mod resolution;
 pub use self::resolution::*;
 
