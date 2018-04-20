@@ -1,35 +1,20 @@
-use std::fs::File;
-use std::convert::From;
 use std::path::PathBuf;
+use std::fs::File;
+use std::io::Read;
 
-use std::io::prelude::*;
-use std::error::Error;
+use hyper::mime::Mime;
 
-use iron::mime::Mime;
+use error::Result;
+use decorator::Decorator;
 
-use pulldown_cmark::{Parser, html};
-
-pub type ViewResult = Result<View, Box<Error>>;
-
-/// A view for the website. This is simply something
-/// which evaluates to a string.
+/// A view on the server.
 pub struct View
 {
-    /// the content of this view
-    content: String,
+    /// The content to display
+    pub content: String,
 
-    /// the mime type for the file (will be inserted into the response header).
-    mime: Mime,
-}
-
-/// Decorates a view with something that the view doesn't already have.
-pub trait ViewDecorator
-{
-    /// Decorates the given `view`.
-    ///
-    /// This should be called by using an `and_then` chain from
-    /// the [ViewResult].
-    fn decorate(&self, view: View) -> ViewResult;
+    /// The contents mime type
+    pub mime: Mime,
 }
 
 //
@@ -38,173 +23,89 @@ pub trait ViewDecorator
 
 impl View
 {
-    /// Constructs a new view with the given `content` and the mime type
-    /// "text/plain".
-    ///
-    /// You should avoid using this directly, if one of the `into()` methods
-    /// applies.
-    fn new(content: String) -> View
+    /// Constructs a view from the raw text in `content`.
+    /// This will have the `text/plain` mime type.
+    pub fn raw<T: Into<String>>(content: T) -> Self
     {
         View {
-            content,
+            content: content.into(),
             mime: "text/plain".parse().unwrap(),
         }
     }
 
-    /// Updates the mime type to the given [mime].
-    pub fn mime(&mut self, mime: Mime)
+    /// Constructs a view from the text in the given `file`.
+    /// This will have the `text/plain` mime type.
+    pub fn file<T: Into<PathBuf>>(file: T) -> Result<Self>
     {
-        self.mime = mime;
-    }
-}
-
-// Convenience Methods for View construction
-impl View
-{
-    /// Attempts to read the file described by the given `path`.
-    pub fn file<T: Into<PathBuf>>(path: T) -> ViewResult
-    {
-        let path = path.into();
-        let path = path.as_path();
-
-        let mut file = File::open(path)?;
+        let mut file = File::open(file.into())?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
 
-        // the contents of the view will, for sure, be the contents of the
-        // file. But the mimetype might change, so we have to be mutable
-        let mut view: View = content.into();
-
-        // check the extension on the file, if it's a valid html-like
-        // extension, then we'll display it as html, otherwise, we'll
-        // display it as plain text
-        if let Some(ext) = path.extension() {
-
-            // convert the extension to lowercase, that way we can be case
-            // insensitive when checking if it's an html file.
-            let ext = ext.to_str().unwrap().to_ascii_lowercase();
-
-            if ext == "html" || ext == "htm" {
-                view.mime("text/html".parse().unwrap());
-            }
-            // if it's markdown, then we're going to pass it through the
-            // markdown-to-html converter, then display the html file
-            else if ext == "md" {
-
-                let original = view.content.clone();
-                let mut md = String::new();
-
-                let p = Parser::new(&original);
-                html::push_html(&mut md, p);
-
-                view.content = md;
-                view.mime("text/html".parse().unwrap());
-            }
-        }
-
-        Ok(view)
+        Ok(View {
+            content,
+            mime: "text/plain".parse().unwrap(),
+        })
     }
 
-    /// Converts anything which can be converted `Into` a `View`, and
-    /// simply runs its `into` method, then returns an `Ok` for the
-    /// [ViewResult].
-    ///
-    /// Literally it's just `Ok(content.into())`
-    pub fn from<T: Into<View>>(content: T) -> ViewResult
+    /// Applies the given `decorator` to this view, consuming it and
+    /// creating another one.
+    pub fn apply<T: Decorator>(self, decorator: &T) -> Self
     {
-        Ok(content.into())
-    }
-}
-
-impl Into<(String, Mime)> for View
-{
-    fn into(self) -> (String, Mime)
-    {
-        (self.content, self.mime)
-    }
-}
-
-impl From<&'static str> for View
-{
-    fn from(content: &str) -> Self
-    {
-        View::new(content.to_owned())
-    }
-}
-
-impl From<String> for View
-{
-    fn from(content: String) -> Self
-    {
-        View::new(content)
+        decorator.decorate(self)
     }
 }
 
 #[cfg(test)]
 mod test
 {
-    use view::*;
-    use iron::mime::{Mime, TopLevel, SubLevel};
+    use super::*;
 
+    /// Tests the [View::raw] API's ability to take in a `&'static str`
     #[test]
-    fn from_path()
+    fn from_raw_str()
     {
-        let path = "src/view.rs";
-        let expected = include_str!("view.rs");
-        let expected = expected.to_owned();
-
-        let view = View::file(path).unwrap();
-        let (content, mime) = view.into();
-        assert_eq!(expected, content);
-
-        // make sure the mime type matches text/plain
-        match mime {
-            Mime(TopLevel::Text, SubLevel::Plain, _) => {},
-            _ => {
-                assert!(false);
-            }
-        }
-
-        assert!(View::file("src/rs.view").is_err());
+        // &'static str => View
+        let view = View::raw("foobar");
+        assert_eq!("foobar", view.content);
+        assert_eq!("text", view.mime.type_());
+        assert_eq!("plain", view.mime.subtype());
     }
 
+    /// Tests the [View::raw] API's ability to take a `String`.
     #[test]
     fn from_string()
     {
-        let input = "a";
-        let expected = input.clone();
+        // String => View
+        let view = View::raw("foobar".to_string());
+        assert_eq!("foobar", view.content);
 
-        let view = View::from(input).unwrap();
-        let (content, _) = view.into();
-        assert_eq!(expected, content);
+        // mime type testing by from_raw_str
     }
 
+    /// Test the [View::file] API's ability to read a source file correctly.
     #[test]
-    fn from_str()
+    fn from_file()
     {
-        let input = "a".to_owned();
-        let expected = input.clone();
+        // test reading an existing files
+        let contents = include_str!("view.rs");
+        let view = View::file("src/view.rs").expect(
+            "Could not find src/view.rs, are you running \
+            this in the project root?"
+        );
 
-        let view = View::from(input).unwrap();
-        let (content, _) = view.into();
-        assert_eq!(expected, content);
+        assert_eq!(contents, view.content);
+        assert_eq!("text", view.mime.type_());
+        assert_eq!("plain", view.mime.subtype());
     }
 
+    /// Tests the [View::file] API's handling of IO errors while reading a
+    /// file.
     #[test]
-    fn into_tuple()
+    fn from_nonexisting_file()
     {
-        let input = "a".to_owned();
-        let expected = input.clone();
-
-        let view = View::from(input).unwrap();
-        let (content, mime) = view.into();
-
-        assert_eq!(expected, content);
-        match mime {
-            Mime(TopLevel::Text, SubLevel::Plain, _) => {},
-            _ => {
-                assert!(false);
-            }
-        }
+        assert!(View::file("src/rs.view").is_err());
     }
+
+    // apply has been tested in the decorators files
+    // no need to test it here too
 }

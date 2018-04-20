@@ -1,137 +1,74 @@
-extern crate iron;
+use std::sync::Arc;
 
-use std::sync::{Arc, RwLock};
+use futures;
+use futures::Future;
 
-use routing::*;
+use hyper;
+use hyper::server::{Request, Response, Service};
+use hyper::StatusCode;
+use hyper::header::ContentType;
 
-use iron::*;
-use iron::error::HttpResult;
-use iron::status;
-use iron::Request;
-use iron::headers::ContentType;
+use routing::Router;
 
-use handle::RequestHandler;
-
-//
-// The framework builder
-//
-
-/// A builder-pattern for constructing a new [Server].
-pub struct ServerBuilder
+/// The basic server service which is used to try to resolve paths
+/// and respond with the correct information.
+pub struct Server
 {
-    router: RouterBuilder,
-    address: String,
-}
-
-impl ServerBuilder
-{
-    /// Creates a new builder with the following defualts:
-    /// * No bound pages
-    /// * 404 page reads "Page Not Found"
-    /// * [StandardRouter]
-    /// * Bound to `localhost:8080`
-    pub fn new() -> Self
-    {
-        ServerBuilder {
-            router: RouterBuilder::new(),
-            address: "localhost:8080".to_owned(),
-        }
-    }
-
-    /// Assigns a new `resolver` to be used in place of the current one. The
-    /// function must be a constructor which creates [Box]es of [Resolver]s.
-    pub fn resolver<T: 'static>(mut self, resolver: T) -> Self
-        where T: Fn(Vec<String>) -> Box<Resolver>
-    {
-        self.router.constructor(Box::new(resolver));
-        self
-    }
-
-    /// Binds the request `handler` to a given `route` on the server.
-    pub fn bind<T: Into<String>, H: 'static>(
-        mut self,
-        route: T,
-        handler: H
-    ) -> Self
-        where H: RequestHandler
-    {
-        self.router.bind(route, handler);
-        self
-    }
-
-    /// Specifies the new `addr` that the server will run on.
-    pub fn address<T: Into<String>>(mut self, addr: T) -> Self
-    {
-        self.address = addr.into();
-        self
-    }
-
-    /// Starts the http server described by this Server Builder.
-    ///
-    /// This is a blocking call.
-    pub fn start(self) -> HttpResult<Listening>
-    {
-        let framework = Server::new(
-            self.router.into(),
-        );
-        let framework = RwLock::new(framework);
-        let framework = Arc::new(framework);
-
-        let call = move | m: &mut Request | {
-            let framework = framework.clone();
-            let framework = framework.read().unwrap();
-            framework.handle(m)
-        };
-
-        Iron::new(call).http(self.address)
-    }
-}
-
-//
-// The framework itself
-//
-
-/// An instance of a running webserver.
-struct Server
-{
-    router: Router,
+    router: Arc<Router>,
 }
 
 impl Server
 {
-    fn new(router: Router) -> Self
+    /// Creates a new instance of the server service, which simply tries
+    /// uses the given `router` to find a page.
+    pub fn new(router: Arc<Router>) -> Self
     {
         Server {
-            router
+            router,
         }
     }
+}
 
-    /// Handles an incoming `request`.
-    fn handle(&self, request: &mut Request) -> IronResult<Response>
+impl Service for Server
+{
+    type Request = Request;
+    type Response = Response;
+    type Error = hyper::Error;
+    type Future = Box<Future<Item=Self::Response, Error=Self::Error>>;
+
+    fn call(&self, req: Request) -> Self::Future
     {
-        let result = match self.router.handle(request) {
-            Some(x) => x,
+        let response = match self.router.handle(req) {
 
-            // page not found :(
+            // No response => 404
             None => {
-                return Ok(Response::with((status::NotFound, "Oh no :(")));
+                let mut response = Response::new();
+                response.set_status(StatusCode::NotFound);
+                response.set_body("404\nRequested file not found");
+                response
+            },
+
+            // We found something, so use that as our body!
+            Some(result) => {
+                let mut response = Response::new();
+
+                match result {
+                    Err(error) => {
+                        response.set_body("Internal Server Error");
+                        response.set_status(StatusCode::InternalServerError);
+                        println!("{}", error);
+                    },
+
+                    Ok(view) => {
+                        response.set_body(view.content);
+                        response.headers_mut().set(ContentType(view.mime));
+                    }
+                }
+
+                response
             }
         };
 
-        match result {
-            Ok(view) => {
-                let (content, mime) = view.into();
-
-                let mut response = Response::with((status::Ok, content));
-                response.headers.set(ContentType(mime));
-
-                Ok(response)
-            },
-
-            Err(reason) => {
-                let reason = reason.to_string();
-                Ok(Response::with((status::InternalServerError, reason)))
-            }
-        }
+        Box::new(futures::future::ok(response))
     }
 }

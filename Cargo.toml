@@ -4,22 +4,15 @@ version = "0.1.0"
 authors = ["addonovan <austin@addonovan.com>"]
 
 [dependencies]
-iron = "0.6"
+futures = "0.1"
+hyper = "0.11"
 pulldown-cmark = { version = "0.0.11", deafult-features = false }
-
-
 
 [[example]]
 name = "hello_world"
 
 [[example]]
+name = "decorators"
+
+[[example]]
 name = "file_browser"
-
-[[example]]
-name = "simple_portal"
-
-[[example]]
-name = "markdown"
-
-[[example]]
-name = "decorator"

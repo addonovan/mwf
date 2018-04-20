@@ -1,26 +1,24 @@
 extern crate mwf;
 
-use mwf::{ServerBuilder, RequestHandler, View, ViewResult};
-use mwf::routing::RouteMap;
+use mwf::{ServerBuilder, RequestHandler, RouteMap, View};
 
+/// A simple request handler which will always reply with "Hello world"
+/// any time it's asked for a response.
 struct HelloWorld;
 impl RequestHandler for HelloWorld
 {
-    fn handle(&self, _args: RouteMap) -> ViewResult
+    fn handle(&self, _route_map: RouteMap) -> mwf::Result<View>
     {
-        View::from("Hello, world!")
+        Ok(View::raw("Hello world!"))
     }
 }
 
-/// The simplest server you can make with `mwf`.
-///
-/// This will use the default settings for everything, except
-/// the root page, which will display a simple "Hello, world!"
-/// message
 fn main()
 {
+    // We register the HelloWorld handler to respond to the `/` request
+    // (i.e. the root)
+    // The server, by default, will run on 127.0.0.1:8080
     ServerBuilder::new()
-        .bind("/", HelloWorld {})
-        .start()
-        .unwrap();
+        .bind("/", HelloWorld)
+        .start();
 }

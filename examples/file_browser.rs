@@ -1,137 +1,126 @@
 extern crate mwf;
+extern crate hyper;
 
-use mwf::{View, ViewResult, ServerBuilder, RequestHandler};
-use mwf::routing::{Resolver, RouteMap};
+use mwf::{ServerBuilder};
+use mwf::{View, Result, RequestHandler};
+use mwf::{Resolver, RouteMap, ResolveParams};
 
-use std::path::PathBuf;
+/// Displays the resolved file. If the file is a directory, then its contents
+/// will be displayed in a list of links.
+struct Browser;
 
-/// This resolves only if the specified file in the URL exists.
+/// Resolves any path so long as a file with the same name exists in the
+/// current working directory.
+///
+/// When a file is matched its full path (relative to the current working
+/// directory) will be inserted into the RouteMap under the key `file`.
 struct FileResolver;
 
-struct FileBrowser;
-impl RequestHandler for FileBrowser
-{
-    fn handle(&self, route_map: RouteMap) -> ViewResult
-    {
-        let file_path = route_map["file"].to_string();
-
-        // convert the requested file into a PathBuf
-        // if it's empty, that means we're at the current
-        // working directory
-        let file: PathBuf;
-        if file_path.is_empty() {
-            file = ".".into();
-        }
-        else {
-            file = file_path.clone().into();
-        }
-
-        // if it's a file, we'll display the contents of the file
-        if file.is_file() {
-            View::file(file_path)
-        }
-        // if it's a directory, we'll list its contents
-        else if file.is_dir() {
-            let mut contents = Vec::new();
-            for entry in file.read_dir().unwrap() {
-
-                //
-                let entry = match entry {
-                    Err(_) => continue,
-                    Ok(entry) => entry,
-                };
-
-                // sometimes rust is very annoying
-                // Path -> &OsStr -> OsString -> String
-                // If you know of an easier way, please file a PR and
-                // let me know, because this is absurd in my opinion
-                let entry = entry.path();
-                let entry = entry.file_name().unwrap();
-                let entry = entry.to_owned();
-                let entry = entry.into_string().unwrap();
-
-                let link: String;
-                if file_path.is_empty() {
-                    link = format!(
-                        "<a href=\"/{0:}\"> {0:} </a>",
-                        entry
-                    );
-                }
-                else {
-                    link = format!(
-                        "<a href=\"/{0:}/{1:}\"> {1:} </a>",
-                        file_path,
-                        entry
-                    );
-                }
-
-                contents.push(link);
-            }
-
-            // separate entries with a newline
-            let contents = contents.join("<br/>");
-
-            // wrap it with html tags
-            let contents = format!("<html>{}</html>", contents);
-
-            // mark it as a view with an html mime type
-            let mut view: View = contents.into();
-            view.mime("text/html".parse().unwrap());
-
-            Ok(view)
-        }
-        // if it's neither, idk say it's not real
-        else {
-            let msg = format!("file \"{}\" does not exist", file_path);
-            View::from(msg)
-        }
-    }
-}
-
-/// The simplest server you can make with `mwf`.
-///
-/// This will use the default settings for everything, except
-/// the root page, which will display a simple "Hello, world!"
-/// message
 fn main()
 {
     ServerBuilder::new()
-        .resolver(FileResolver::new)
-        .bind("*", FileBrowser {})
-        .start()
-        .unwrap();
+        .resolver(|_, _| Box::new(FileResolver))
+        .bind("*", Browser)
+        .start();
 }
 
-impl FileResolver
+impl RequestHandler for Browser
 {
-    /// Creates a new FileResolver using the given string tokens.
-    pub fn new(_: Vec<String>) -> Box<Resolver>
+    fn handle(&self, route_map: RouteMap) -> Result<View>
     {
-        Box::new(FileResolver {})
+        use std::path::PathBuf;
+
+        // copy the path as a string and the file as a PathBuf out from the
+        // file attribute. If the file attribute isn't there, then we know
+        // that the resolver claims it didn't exist
+        let (path, file): (String, PathBuf) = match route_map.get("file") {
+            None => {
+                return Ok(View::raw("No such file"))
+            },
+
+            Some(it) => (it.clone(), it.into())
+        };
+
+        // if it's a file, then it's really easy:
+        // just look at its contents
+        if file.is_file() {
+            return View::file(file);
+        }
+
+        // otherwise, it's a directory. So we have to list all of the contents
+        // of the directory (with links!)
+        let mut contents = Vec::new();
+        for entry in file.read_dir().unwrap() {
+
+            // Make sure that the entry was alright
+            let entry = match entry {
+                Err(_) => continue,
+                Ok(x) => x,
+            };
+
+            // :(
+            // Path -> &OsStr -> Option<OsString> -> OsString
+            //      -> Option<String> -> String
+            let entry = entry.path();
+            let entry = entry.file_name().unwrap();
+            let entry = entry.to_owned();
+            let entry = entry.into_string().unwrap();
+
+            // generate the link, relative to the root of the web server
+            // if we don't check for an empty path, then we could wind up with
+            // a leading //, which would screw a lot of stuff up
+            let link: String;
+            if path.is_empty() {
+                link = format!("/{}", entry);
+            }
+            else {
+                link = format!("/{}/{}", path, entry);
+            }
+
+            // create the actual link for the entry
+            let link = format!("<a href='{}'> {} </a>", link, entry);
+            contents.push(link);
+        }
+
+        // try to make this part into a decorator!
+
+        // build a valid HTML page from the list of links
+        let contents = contents.join("<br/>");
+        let contents = format!("<html><body>{}</body></html>", contents);
+
+        // manually create a view that shows the directory listing as html
+        let mut view = View::raw(contents);
+        view.mime = "text/html".parse().unwrap();
+
+        Ok(view)
     }
 }
 
 impl Resolver for FileResolver
 {
-    fn resolve(&self, route: &Vec<&str>) -> Option<RouteMap>
+    fn resolve(&self, params: &ResolveParams) -> Option<RouteMap>
     {
-        // join it all into a single string, then check if that file exists
-        let full_path = route.join("/");
-        let file: PathBuf;
-        if full_path.is_empty() {
-            file = ".".into();
-        }
-        else {
-            file = full_path.clone().into();
+        use hyper::Method;
+        use std::path::PathBuf;
+
+        // we'll only respond to Get requests
+        if params.method != Method::Get {
+            return None;
         }
 
+        // get the route from the URL
+        let mut map = RouteMap::new();
+        let path: String = match params.route.join("/").as_str() {
+            "" => ".".into(),
+            x => x.into()
+        };
+
+        // does that file exist?
+        let file: PathBuf = path.clone().into();
         if file.exists() {
-            let mut map = RouteMap::new();
-            map.insert("file".into(), full_path);
-            Some(map)
+            map.insert("file".into(), path);
         }
-        else {
-            None
-        }
+
+        Some(map)
     }
 }
