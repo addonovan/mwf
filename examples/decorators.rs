@@ -1,6 +1,6 @@
 extern crate mwf;
 
-use mwf::{ServerBuilder, RequestHandler, RouteMap, View};
+use mwf::{ServerBuilder, RequestHandler, RouteMap, View, Decorator};
 use mwf::decorator;
 
 /// This is what our page should be formatted like.
@@ -18,6 +18,19 @@ r#"
 </html>
 "#;
 
+/// A decorator which converts all the text to be SCREAMING
+struct Screaming;
+impl Decorator for Screaming
+{
+    fn decorate(&self, view: View) -> View
+    {
+        View {
+            content: view.content.to_uppercase(),
+            mime: view.mime,
+        }
+    }
+}
+
 /// A simple example of the decorator class.
 ///
 /// This will use the [Markdown](decorator::Markdown) decorator to convert
@@ -29,6 +42,7 @@ r#"
 /// it to HTML, then insert it where the content in your site should go.
 struct DecoratorExample
 {
+    screaming: Screaming,
     markdown: decorator::Markdown,
     page: decorator::Surround,
 }
@@ -38,6 +52,7 @@ impl DecoratorExample
     pub fn new() -> Self
     {
         DecoratorExample {
+            screaming: Screaming,
             markdown: decorator::Markdown,
             page: decorator::Surround::from(PAGE_FORMAT),
         }
@@ -52,6 +67,8 @@ impl RequestHandler for DecoratorExample
             View::raw("# Hello World!") // given basic markdown text
                 .apply(&self.markdown)  // convert it to html
                 .apply(&self.page)      // and insert it into our page format
+                .apply(&self.screaming) // and make our website SCREAM FOR JOY
+                                        // about how nice an easy decorators are
         )
     }
 }

@@ -9,6 +9,7 @@ mod view;
 pub use self::view::*;
 
 pub mod decorator;
+pub use self::decorator::Decorator;
 
 mod resolution;
 pub use self::resolution::*;
