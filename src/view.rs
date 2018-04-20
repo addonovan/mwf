@@ -45,7 +45,7 @@ impl View
         })
     }
 
-    pub fn with<T: Decorator>(self, decorator: T) -> Self
+    pub fn apply<T: Decorator>(self, decorator: &T) -> Self
     {
         decorator.decorate(self)
     }
@@ -53,18 +53,20 @@ impl View
 
 impl Decorator for MarkdownDecorator
 {
-    fn decorate(&self, mut view: View) -> View
+    fn decorate(&self, view: View) -> View
     {
         use pulldown_cmark::{Parser, html};
 
-        let input = view.content.clone();
         let mut output = String::new();
-
-        let p = Parser::new(&input);
+        let p = Parser::new(&view.content);
         html::push_html(&mut output, p);
-        view.content = output;
 
-        view
+        // create a new view with the html output and the correct
+        // mime type
+        View {
+            content: output,
+            mime: "text/html".parse().unwrap(),
+        }
     }
 }
 

@@ -17,5 +17,3 @@ fn main()
         .bind("/", HelloWorld)
         .start();
 }
-
-
