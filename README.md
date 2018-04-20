@@ -1,8 +1,6 @@
-mwf
-===
+# mwf
 
-General
----
+## General
 
 *M*y *W*eb *F*ramework. (Great name, I know)
 
@@ -13,15 +11,13 @@ webframework from scratch.
 This is not intended to be used in a production or production-like setting, so
 please don't even try to do so.
 
-About
----
+## About
 
 This is a backend web framework, like ASP.NET. The most important part of this
 is the router and route resolvers, which take in a route that has been requested
 from the server and try to find the handler which should accept it. 
 
-Examples
----
+## Examples
 
 Examples can be found in the [examples](examples) directory.
 
@@ -44,8 +40,7 @@ fn main()
 }
 ```
 
-Routing
----
+## Routing
 
 The `Resolver` trait, whose definition (as well as related one) is listed below, 
 will simply take in a URL which has been split up along the slashes, and return
@@ -84,8 +79,7 @@ The standard resolver (which is the default one enabled) has three path tokens:
       
 Using these tokens, you can build route handlers for a lot of things.
 
-Request Handlers
----
+## Request Handlers
 
 On the other side of request resolution, is the actual handler itself. Handler
 is also a trait (shown below), but a much simpler one. This receives the
