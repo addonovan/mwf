@@ -1,15 +1,27 @@
+use std::sync::Arc;
 
 use futures;
 use futures::Future;
 
 use hyper;
-use hyper::header::ContentLength;
 use hyper::server::{Request, Response, Service};
-use hyper::{Method, StatusCode};
+
+use routing::Router;
+use hyper::StatusCode;
 
 pub struct Server
 {
+    router: Arc<Router>,
+}
 
+impl Server
+{
+    pub fn new(router: Arc<Router>) -> Self
+    {
+        Server {
+            router,
+        }
+    }
 }
 
 impl Service for Server
@@ -21,8 +33,20 @@ impl Service for Server
 
     fn call(&self, req: Request) -> Self::Future
     {
-        let mut response = Response::new();
-        response.set_body("Hello, world!");
+        let response = match self.router.handle(req) {
+            None => {
+                let mut response = Response::new();
+                response.set_status(StatusCode::NotFound);
+                response.set_body("404\nRequested file not found");
+                response
+            },
+
+            Some(x) => {
+                let mut response = Response::new();
+                response.set_body(x);
+                response
+            }
+        };
 
         Box::new(futures::future::ok(response))
     }

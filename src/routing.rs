@@ -1,4 +1,4 @@
-use hyper::Method;
+use hyper::{Method, Request};
 
 use resolution::*;
 use request_handler::RequestHandler;
@@ -25,6 +25,41 @@ pub struct Router
 //
 // Implementation
 //
+
+impl Router
+{
+    pub fn handle(&self, request: Request) -> Option<String>
+    {
+        let method = request.method();
+        let route: Vec<&str> = request.path()
+            .split("/")
+            .filter_map(|it| {
+                if it.is_empty() {
+                    None
+                }
+                else {
+                    Some(it)
+                }
+            })
+            .collect();
+
+        let params = ResolveParams {
+            method: method.clone(),
+            route,
+        };
+
+        for entry in &self.resolvers {
+            let data = match entry.resolver.resolve(&params) {
+                None => continue,
+                Some(x) => x,
+            };
+
+            return Some(entry.handler.handle(data));
+        }
+
+        None
+    }
+}
 
 impl RouterBuilder
 {
@@ -66,6 +101,16 @@ impl RouterBuilder
                 handler
             )
         );
+    }
+}
+
+impl Into<Router> for RouterBuilder
+{
+    fn into(self) -> Router
+    {
+        Router {
+            resolvers: self.resolvers,
+        }
     }
 }
 

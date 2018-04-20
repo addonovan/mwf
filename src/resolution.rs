@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use hyper::server::Request;
 use hyper::Method;
 
 pub type RouteMap = HashMap<String, String>;
