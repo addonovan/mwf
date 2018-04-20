@@ -5,10 +5,13 @@ use futures::Future;
 
 use hyper;
 use hyper::server::{Request, Response, Service};
+use hyper::StatusCode;
+use hyper::header::ContentType;
 
 use routing::Router;
-use hyper::StatusCode;
 
+/// The basic server service which is used to try to resolve paths
+/// and respond with the correct information.
 pub struct Server
 {
     router: Arc<Router>,
@@ -16,6 +19,8 @@ pub struct Server
 
 impl Server
 {
+    /// Creates a new instance of the server service, which simply tries
+    /// uses the given `router` to find a page.
     pub fn new(router: Arc<Router>) -> Self
     {
         Server {
@@ -34,6 +39,8 @@ impl Service for Server
     fn call(&self, req: Request) -> Self::Future
     {
         let response = match self.router.handle(req) {
+
+            // No response => 404
             None => {
                 let mut response = Response::new();
                 response.set_status(StatusCode::NotFound);
@@ -41,9 +48,23 @@ impl Service for Server
                 response
             },
 
-            Some(x) => {
+            // We found something, so use that as our body!
+            Some(result) => {
                 let mut response = Response::new();
-                response.set_body(x);
+
+                match result {
+                    Err(error) => {
+                        response.set_body("Internal Server Error");
+                        response.set_status(StatusCode::InternalServerError);
+                        println!("{}", error);
+                    },
+
+                    Ok(view) => {
+                        response.set_body(view.content);
+                        response.headers_mut().set(ContentType(view.mime));
+                    }
+                }
+
                 response
             }
         };

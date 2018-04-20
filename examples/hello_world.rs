@@ -1,13 +1,13 @@
 extern crate mwf;
 
-use mwf::{ServerBuilder, RequestHandler, RouteMap};
+use mwf::{ServerBuilder, RequestHandler, RouteMap, View};
 
 struct HelloWorld;
 impl RequestHandler for HelloWorld
 {
-    fn handle(&self, route_map: RouteMap) -> String
+    fn handle(&self, _route_map: RouteMap) -> mwf::Result<View>
     {
-        "Hello World!".into()
+        Ok(View::raw("Hello world!"))
     }
 }
 

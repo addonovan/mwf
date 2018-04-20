@@ -1,5 +1,12 @@
 extern crate hyper;
 extern crate futures;
+extern crate pulldown_cmark;
+
+mod error;
+pub use self::error::*;
+
+mod view;
+pub use self::view::*;
 
 mod resolution;
 pub use self::resolution::*;

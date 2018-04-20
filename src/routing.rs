@@ -2,6 +2,8 @@ use hyper::{Method, Request};
 
 use resolution::*;
 use request_handler::RequestHandler;
+use view::View;
+use error::Result;
 
 type ResolverConstructor = Fn(Method, Vec<String>) -> Box<Resolver>;
 
@@ -28,7 +30,7 @@ pub struct Router
 
 impl Router
 {
-    pub fn handle(&self, request: Request) -> Option<String>
+    pub fn handle(&self, request: Request) -> Option<Result<View>>
     {
         let method = request.method();
         let route: Vec<&str> = request.path()
