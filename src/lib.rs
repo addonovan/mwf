@@ -1,4 +1,4 @@
-extern crate hyper;
+pub extern crate hyper;
 extern crate futures;
 extern crate pulldown_cmark;
 

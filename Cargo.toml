@@ -13,3 +13,6 @@ name = "hello_world"
 
 [[example]]
 name = "decorators"
+
+[[example]]
+name = "file_browser"
