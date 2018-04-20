@@ -128,3 +128,46 @@ impl Decorator for Surround
         }
     }
 }
+
+#[cfg(test)]
+mod test
+{
+    use super::*;
+
+    #[test]
+    fn surround()
+    {
+        let dec = Surround::new("foo", "baz");
+        let view = View::raw("bar").apply(&dec);
+        assert_eq!("foobarbaz", view.content);
+
+        let dec = Surround::from("foo{{middle}}baz");
+        let view = View::raw("bar").apply(&dec);
+        assert_eq!("foobarbaz", view.content);
+
+        let dec = Surround::from("barbaz");
+        let view = View::raw("foo").apply(&dec);
+        assert_eq!("foobarbaz", view.content);
+    }
+
+    #[test]
+    fn markdown()
+    {
+        let dec = Markdown;
+        let view = View::raw("# Hello world!").apply(&dec);
+        assert_eq!("<h1>Hello world!</h1>\n", view.content);
+        assert_eq!("text", view.mime.type_());
+        assert_eq!("html", view.mime.subtype());
+    }
+
+    #[test]
+    fn chaining()
+    {
+        let surround = Surround::new("*foo", "baz*");
+        let md = Markdown;
+        let view = View::raw("bar").apply(&surround).apply(&md);
+        assert_eq!("<p><em>foobarbaz</em></p>\n", view.content);
+        assert_eq!("text", view.mime.type_());
+        assert_eq!("html", view.mime.subtype());
+    }
+}
