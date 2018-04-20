@@ -7,6 +7,7 @@ use hyper::Method;
 use routing::*;
 use server::*;
 use request_handler::RequestHandler;
+use resolution::Resolver;
 
 /// The protocol to use for the server.
 pub enum Protocol
@@ -36,6 +37,16 @@ impl ServerBuilder
             proto: Protocol::Http,
             addr: "127.0.0.1:8080".parse().unwrap(),
         }
+    }
+
+    /// Changes the current resolver constructor to the new one specified
+    /// by `resolver`. Note that this is a resolver *constructor* and not a
+    /// resolver alone.
+    pub fn resolver<R: 'static>(mut self, resolver: R) -> Self
+        where R: Fn(Method, Vec<String>) -> Box<Resolver>
+    {
+        self.router.constructor(Box::new(resolver));
+        self
     }
 
     /// Binds a new `handler` to a given `route` on a GET request.

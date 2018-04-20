@@ -3,8 +3,13 @@ use std::io::Error as IoError;
 use std::fmt;
 use std::result;
 
+/// A result type which used [mwf::Error].
 pub type Result<T> = result::Result<T, Error>;
 
+/// A generic error type for mwf.
+///
+/// If you think I should add another error type, please submit a pull
+/// request.
 #[derive(Debug)]
 pub enum Error
 {

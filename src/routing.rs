@@ -5,20 +5,30 @@ use request_handler::RequestHandler;
 use view::View;
 use error::Result;
 
+/// A function which will create a new [Resolver] instance.
 type ResolverConstructor = Fn(Method, Vec<String>) -> Box<Resolver>;
 
+/// An entry in the [Router]/[RouterBuilder]'s resolver vector.
+///
+/// Really, it's nothing more than a named tuple.
 struct ResolverEntry
 {
     pub resolver: Box<Resolver>,
     pub handler: Box<RequestHandler>,
 }
 
+/// Helps construct a thread-safe [Router] by using non-thread-safe operations
+/// (such as creating new [Resolvers](Resolver)), until the server is spawned,
+/// at which case this will be converted into a router.
 pub struct RouterBuilder
 {
     constructor: Box<ResolverConstructor>,
     resolvers: Vec<ResolverEntry>,
 }
 
+/// A thread-safe list of all [Resolvers](Resolver) and their corresponding
+/// [RequestHandlers](RequestHandler). Also implements the normalization and
+/// splitting of the path before the resolvers get to see it.
 pub struct Router
 {
     resolvers: Vec<ResolverEntry>,
@@ -30,6 +40,8 @@ pub struct Router
 
 impl Router
 {
+    /// Tries to handle the given `request`. If no resolvers accept the route
+    /// then it will return `None`, indicating an Http Status 404.
     pub fn handle(&self, request: Request) -> Option<Result<View>>
     {
         let method = request.method();
@@ -65,6 +77,8 @@ impl Router
 
 impl RouterBuilder
 {
+    /// Constructs a new router builder which uses the [StandardResolver] by
+    /// default.
     pub fn new() -> RouterBuilder
     {
         RouterBuilder {
@@ -73,6 +87,15 @@ impl RouterBuilder
         }
     }
 
+    /// Changes the current resolver `constructor` for the given one. Every
+    /// paged bound from now on will use this resolver instead.
+    pub fn constructor(&mut self, constructor: Box<ResolverConstructor>)
+    {
+        self.constructor = constructor;
+    }
+
+    /// Binds a new request `handler` to the given route `spec` and connection
+    /// `method`.
     pub fn bind<T: Into<String>, H: 'static>(
         &mut self,
         method: Method,
