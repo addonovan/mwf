@@ -54,3 +54,58 @@ impl View
         decorator.decorate(self)
     }
 }
+
+#[cfg(test)]
+mod test
+{
+    use super::*;
+
+    /// Tests the [View::raw] API's ability to take in a `&'static str`
+    #[test]
+    fn from_raw_str()
+    {
+        // &'static str => View
+        let view = View::raw("foobar");
+        assert_eq!("foobar", view.content);
+        assert_eq!("text", view.mime.type_());
+        assert_eq!("plain", view.mime.subtype());
+    }
+
+    /// Tests the [View::raw] API's ability to take a `String`.
+    #[test]
+    fn from_string()
+    {
+        // String => View
+        let view = View::raw("foobar".to_string());
+        assert_eq!("foobar", view.content);
+
+        // mime type testing by from_raw_str
+    }
+
+    /// Test the [View::file] API's ability to read a source file correctly.
+    #[test]
+    fn from_file()
+    {
+        // test reading an existing files
+        let contents = include_str!("view.rs");
+        let view = View::file("src/view.rs").expect(
+            "Could not find src/view.rs, are you running \
+            this in the project root?"
+        );
+
+        assert_eq!(contents, view.content);
+        assert_eq!("text", view.mime.type_());
+        assert_eq!("plain", view.mime.subtype());
+    }
+
+    /// Tests the [View::file] API's handling of IO errors while reading a
+    /// file.
+    #[test]
+    fn from_nonexisting_file()
+    {
+        assert!(View::file("src/rs.view").is_err());
+    }
+
+    // apply has been tested in the decorators files
+    // no need to test it here too
+}
