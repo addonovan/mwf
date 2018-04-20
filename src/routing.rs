@@ -150,3 +150,41 @@ impl ResolverEntry
         }
     }
 }
+
+#[cfg(test)]
+mod test
+{
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    struct Handler;
+    impl RequestHandler for Handler
+    {
+        fn handle(&self, _: RouteMap) -> Result<View>
+        {
+            Ok(View::raw(""))
+        }
+    }
+
+    /// Tests if the new constructor function gets called by the builder.
+    #[test]
+    fn builder_invokes_constructor()
+    {
+        let called = Arc::new(Mutex::new(false));
+        let called0 = called.clone();
+
+        let mut builder = RouterBuilder::new();
+        builder.constructor(Box::new(move |a, b| {
+            let called = called0.clone();
+            let mut called = called.lock().unwrap();
+            *called = true;
+
+            StandardResolver::new(a, b)
+        }));
+        builder.bind(Method::Get, "", Handler);
+
+        let called = called.lock().unwrap();
+        assert_eq!(true, *called);
+    }
+
+}
