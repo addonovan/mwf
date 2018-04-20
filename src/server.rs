@@ -1,137 +1,29 @@
-extern crate iron;
 
-use std::sync::{Arc, RwLock};
+use futures;
+use futures::Future;
 
-use routing::*;
+use hyper;
+use hyper::header::ContentLength;
+use hyper::server::{Request, Response, Service};
+use hyper::{Method, StatusCode};
 
-use iron::*;
-use iron::error::HttpResult;
-use iron::status;
-use iron::Request;
-use iron::headers::ContentType;
-
-use handle::RequestHandler;
-
-//
-// The framework builder
-//
-
-/// A builder-pattern for constructing a new [Server].
-pub struct ServerBuilder
+pub struct Server
 {
-    router: RouterBuilder,
-    address: String,
+
 }
 
-impl ServerBuilder
+impl Service for Server
 {
-    /// Creates a new builder with the following defualts:
-    /// * No bound pages
-    /// * 404 page reads "Page Not Found"
-    /// * [StandardRouter]
-    /// * Bound to `localhost:8080`
-    pub fn new() -> Self
+    type Request = Request;
+    type Response = Response;
+    type Error = hyper::Error;
+    type Future = Box<Future<Item=Self::Response, Error=Self::Error>>;
+
+    fn call(&self, req: Request) -> Self::Future
     {
-        ServerBuilder {
-            router: RouterBuilder::new(),
-            address: "localhost:8080".to_owned(),
-        }
-    }
+        let mut response = Response::new();
+        response.set_body("Hello, world!");
 
-    /// Assigns a new `resolver` to be used in place of the current one. The
-    /// function must be a constructor which creates [Box]es of [Resolver]s.
-    pub fn resolver<T: 'static>(mut self, resolver: T) -> Self
-        where T: Fn(Vec<String>) -> Box<Resolver>
-    {
-        self.router.constructor(Box::new(resolver));
-        self
-    }
-
-    /// Binds the request `handler` to a given `route` on the server.
-    pub fn bind<T: Into<String>, H: 'static>(
-        mut self,
-        route: T,
-        handler: H
-    ) -> Self
-        where H: RequestHandler
-    {
-        self.router.bind(route, handler);
-        self
-    }
-
-    /// Specifies the new `addr` that the server will run on.
-    pub fn address<T: Into<String>>(mut self, addr: T) -> Self
-    {
-        self.address = addr.into();
-        self
-    }
-
-    /// Starts the http server described by this Server Builder.
-    ///
-    /// This is a blocking call.
-    pub fn start(self) -> HttpResult<Listening>
-    {
-        let framework = Server::new(
-            self.router.into(),
-        );
-        let framework = RwLock::new(framework);
-        let framework = Arc::new(framework);
-
-        let call = move | m: &mut Request | {
-            let framework = framework.clone();
-            let framework = framework.read().unwrap();
-            framework.handle(m)
-        };
-
-        Iron::new(call).http(self.address)
-    }
-}
-
-//
-// The framework itself
-//
-
-/// An instance of a running webserver.
-struct Server
-{
-    router: Router,
-}
-
-impl Server
-{
-    fn new(router: Router) -> Self
-    {
-        Server {
-            router
-        }
-    }
-
-    /// Handles an incoming `request`.
-    fn handle(&self, request: &mut Request) -> IronResult<Response>
-    {
-        let result = match self.router.handle(request) {
-            Some(x) => x,
-
-            // page not found :(
-            None => {
-                return Ok(Response::with((status::NotFound, "Oh no :(")));
-            }
-        };
-
-        match result {
-            Ok(view) => {
-                let (content, mime) = view.into();
-
-                let mut response = Response::with((status::Ok, content));
-                response.headers.set(ContentType(mime));
-
-                Ok(response)
-            },
-
-            Err(reason) => {
-                let reason = reason.to_string();
-                Ok(Response::with((status::InternalServerError, reason)))
-            }
-        }
+        Box::new(futures::future::ok(response))
     }
 }

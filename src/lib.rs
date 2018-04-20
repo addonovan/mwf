@@ -1,17 +1,15 @@
-extern crate iron;
-extern crate pulldown_cmark;
+extern crate hyper;
+extern crate futures;
 
-// Export as mwf::*
+// publish as mwf::*
 mod server;
 pub use self::server::*;
 
-// Export as mwf::routing::*
-pub mod routing;
+mod resolution;
+pub use self::resolution::*;
 
-// Export as mwf::*
-mod view;
-pub use self::view::*;
+mod request_handler;
+pub use self::request_handler::*;
 
-// Export as mwf::*
-mod handle;
-pub use self::handle::*;
+mod routing;
+pub use self::routing::*;
