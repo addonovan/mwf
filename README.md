@@ -30,34 +30,40 @@ Here is a simple "Hello World" server:
 struct HelloWorld;
 impl RequestHandler for HelloWorld
 {
-    fn handle(&self, _args: RouteMap) -> ViewResult
+    fn handle(&self, _route_map: RouteMap) -> mwf::Result<View>
     {
-        View::from("Hello, world!")
+        Ok(View::raw("Hello world!"))
     }
 }
 
 fn main()
 {
     ServerBuilder::new()
-        .bind("/", HelloWorld {})
-        .start()
-        .unwrap();
+        .bind("/", HelloWorld)
+        .start();
 }
 ```
 
 Routing
 ---
 
-The `Resolver` trait, whose definition is listed below, will simply take in a
-URL which has been split up along the slashes, and return `None` if the path
-isn't accepted by the resolver, or `Some(RouteMap)` if the route was accepted.
-A `RouteMap` is simply `HashMap<String, String>`, which is filled with any
-information the resolver might want to pass along to the handler.
+The `Resolver` trait, whose definition (as well as related one) is listed below, 
+will simply take in a URL which has been split up along the slashes, and return
+`None` if the path isn't accepted by the resolver, or `Some(RouteMap)` if the
+route was accepted. 
 ```rust
+pub type RouteMap = HashMap<String, String>;
+
+pub struct ResolveParams<'a>
+{
+    pub method: Method,
+    pub route: Vec<&'a str>,
+}
+
 pub trait Resolver
     where Self: Send + Sync
 {
-    fn resolve(&self, route: &Vec<&str>) -> Option<RouteMap>;
+    fn resolve(&self, params: &ResolveParams) -> Option<RouteMap>;
 }
 ```
 The standard resolver (which is the default one enabled) has three path tokens:
@@ -87,27 +93,15 @@ is also a trait (shown below), but a much simpler one. This receives the
 of the content which is meant to be at the URL. Because generating the page
 might cause an error (who hasn't seen a `500 Internal Service Error` before?),
 we don't want the entire server to crash on such a problem. For this reason, the
-handler must actually return a `ViewResult` (aka `Result<View, Box<Error>>`).
+handler must actually return a `mwf::Result`.
 ```rust
 pub trait RequestHandler
     where Self: Send + Sync
 {
-    fn handle(&self, route_map: RouteMap) -> ViewResult;
+    fn handle(&self, route_map: RouteMap) -> mwf::Result<View>;
 }
 ```
 
 Using the `ServerBuilder` interface, handlers are attached to the server by
-using the `ServerBuilder.bind(self, route_spec, handler)` method, as shown above
-in the hello world example.
-
-Dependencies
----
-
-It uses  [iron](https://github.com/iron/iron/) as the underlying HTTP server, 
-because I don't actually ~~hate myself~~ want to implement an HTTP server, as
- well as [pulldown-cmark](https://github.com/google/pulldown-cmark) for 
-converting markdown to HTML.
-
-Of course, this is rust and you don't actually need to know that, but I thought
-I would mention it anyways.
-
+using the `ServerBuilder.bind(method, route_spec, handler)` method, as shown 
+above in the hello world example.
