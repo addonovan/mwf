@@ -2,7 +2,8 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::io::Read;
 
-use hyper::mime::Mime;
+use mime_guess;
+use mime_guess::Mime;
 
 use error::Result;
 use decorator::Decorator;
@@ -37,13 +38,17 @@ impl View
     /// This will have the `text/plain` mime type.
     pub fn file<T: Into<PathBuf>>(file: T) -> Result<Self>
     {
-        let mut file = File::open(file.into())?;
+        let path: PathBuf = file.into();
+        let mut file = File::open(&path)?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
 
+        let mime: Mime = mime_guess::guess_mime_type_opt(path)
+            .unwrap_or_else(|| "text/plain".parse().unwrap());
+
         Ok(View {
             content,
-            mime: "text/plain".parse().unwrap(),
+            mime,
         })
     }
 
