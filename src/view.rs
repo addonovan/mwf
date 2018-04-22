@@ -2,7 +2,8 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::io::Read;
 
-use hyper::mime::Mime;
+use mime_guess;
+use mime_guess::Mime;
 
 use error::Result;
 use decorator::Decorator;
@@ -37,13 +38,17 @@ impl View
     /// This will have the `text/plain` mime type.
     pub fn file<T: Into<PathBuf>>(file: T) -> Result<Self>
     {
-        let mut file = File::open(file.into())?;
+        let path: PathBuf = file.into();
+        let mut file = File::open(&path)?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
 
+        let mime: Mime = mime_guess::guess_mime_type_opt(path)
+            .unwrap_or_else(|| "text/plain".parse().unwrap());
+
         Ok(View {
             content,
-            mime: "text/plain".parse().unwrap(),
+            mime,
         })
     }
 
@@ -88,14 +93,10 @@ mod test
     {
         // test reading an existing files
         let contents = include_str!("view.rs");
-        let view = View::file("src/view.rs").expect(
-            "Could not find src/view.rs, are you running \
-            this in the project root?"
-        );
+        let view = View::file("src/view.rs")
+            .expect("Could not find or open src/view.rs for read");
 
         assert_eq!(contents, view.content);
-        assert_eq!("text", view.mime.type_());
-        assert_eq!("plain", view.mime.subtype());
     }
 
     /// Tests the [View::file] API's handling of IO errors while reading a
@@ -104,6 +105,17 @@ mod test
     fn from_nonexisting_file()
     {
         assert!(View::file("src/rs.view").is_err());
+    }
+
+    /// Tests the [View::file] API's correct detection of mime types.
+    #[test]
+    fn from_correct_mime_type()
+    {
+        let view = View::file("src/view.rs")
+            .expect("Could not find or open src/view.rs for read");
+
+        assert_eq!("text", view.mime.type_());
+        assert_eq!("x-rust", view.mime.subtype());
     }
 
     // apply has been tested in the decorators files

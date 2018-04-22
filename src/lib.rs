@@ -1,4 +1,5 @@
 pub extern crate hyper;
+pub extern crate mime_guess;
 extern crate futures;
 extern crate pulldown_cmark;
 
