@@ -93,14 +93,10 @@ mod test
     {
         // test reading an existing files
         let contents = include_str!("view.rs");
-        let view = View::file("src/view.rs").expect(
-            "Could not find src/view.rs, are you running \
-            this in the project root?"
-        );
+        let view = View::file("src/view.rs")
+            .expect("Could not find or open src/view.rs for read");
 
         assert_eq!(contents, view.content);
-        assert_eq!("text", view.mime.type_());
-        assert_eq!("plain", view.mime.subtype());
     }
 
     /// Tests the [View::file] API's handling of IO errors while reading a
@@ -109,6 +105,17 @@ mod test
     fn from_nonexisting_file()
     {
         assert!(View::file("src/rs.view").is_err());
+    }
+
+    /// Tests the [View::file] API's correct detection of mime types.
+    #[test]
+    fn from_correct_mime_type()
+    {
+        let view = View::file("src/view.rs")
+            .expect("Could not find or open src/view.rs for read");
+
+        assert_eq!("text", view.mime.type_());
+        assert_eq!("x-rust", view.mime.subtype());
     }
 
     // apply has been tested in the decorators files
